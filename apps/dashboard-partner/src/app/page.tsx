@@ -1,0 +1,20 @@
+'use client'
+import { BarChart3, Building2, ChevronRight, CreditCard, Globe2, LayoutGrid, LifeBuoy, Palette, Plus, Settings, ShieldCheck, Users } from 'lucide-react'
+import { useState } from 'react'
+
+export default function Partner(){
+ const [color,setColor]=useState('#174b36')
+ const [accent,setAccent]=useState('#d8ff72')
+ const [modal,setModal]=useState(false)
+ const [toast,setToast]=useState('')
+ const notify=(message:string)=>{setToast(message);setTimeout(()=>setToast(''),2400)}
+ return <main><aside><div className="logo"><i>A</i><div><b>ASAX</b><small>Partner Console</small></div></div><nav>{[[LayoutGrid,'Visão geral'],[Building2,'Clientes'],[Palette,'Marca e domínio'],[CreditCard,'Planos e cobrança'],[BarChart3,'Relatórios'],[Users,'Equipe parceira']].map(([Icon,label],i)=><button className={i===0?'active':''} key={label as string}>{<Icon size={18}/>}<span>{label as string}</span></button>)}</nav><footer><button><LifeBuoy size={18}/>Suporte parceiro</button><button><Settings size={18}/>Configurações</button><div><span>LM</span><p><b>Lucas Martins</b><small>Proprietário</small></p></div></footer></aside>
+ <section className="content"><header><div><small>PAINEL DO PARCEIRO</small><h1>Seu negócio SaaS, em um só lugar.</h1></div><button onClick={()=>setModal(true)}><Plus size={17}/>Novo cliente</button></header>
+ <div className="notice"><ShieldCheck/><div><b>Operação saudável</b><p>Todos os serviços ativos · último backup há 34 minutos</p></div><span>99,99% uptime</span></div>
+ <div className="metrics"><article><small>Receita mensal recorrente</small><strong>R$ 18.740</strong><em>↑ 14,8% este mês</em></article><article><small>Clientes ativos</small><strong>42</strong><em>3 em período de teste</em></article><article><small>Usuários finais</small><strong>286</strong><em>68% do limite</em></article><article><small>Margem estimada</small><strong>71,4%</strong><em>R$ 13.382 líquido</em></article></div>
+ <div className="grid"><section className="clients"><header><div><h2>Clientes recentes</h2><p>Acompanhe uso, plano e situação financeira.</p></div><button>Ver todos <ChevronRight size={15}/></button></header>{[['Orbe Studio','Pro','12 usuários','Ativo'],['Clínica Vitta','Enterprise','28 usuários','Ativo'],['Norte Solar','Pro','8 usuários','Teste'],['Atlas RH','Enterprise','42 usuários','Ativo']].map((r,i)=><div className="client" key={r[0]}><i>{r[0].split(' ').map(x=>x[0]).join('')}</i><div><b>{r[0]}</b><small>cliente-{i+1}.nexocrm.app</small></div><span>{r[1]}</span><span>{r[2]}</span><em className={r[3]==='Teste'?'trial':''}>{r[3]}</em><button>•••</button></div>)}</section>
+ <section className="brand-card"><header><div><h2>Marca ativa</h2><p>Prévia para todos os clientes</p></div><Globe2/></header><div className="browser"><span/><span/><span/><b style={{background:color,color:accent}}>A</b><div><i style={{background:color}}/><i/><i/></div></div><label>Cor principal <input type="color" value={color} onChange={e=>setColor(e.target.value)}/><code>{color}</code></label><label>Cor de destaque <input type="color" value={accent} onChange={e=>setAccent(e.target.value)}/><code>{accent}</code></label><button onClick={()=>{localStorage.setItem('asax.brand',JSON.stringify({color,accent}));notify('Identidade visual salva')}} className="outline">Salvar marca e domínio</button></section></div>
+ {modal&&<div className="partner-modal"><form onSubmit={e=>{e.preventDefault();setModal(false);notify('Cliente criado no modo local')}}><header><h2>Novo cliente</h2><button type="button" onClick={()=>setModal(false)}>×</button></header><label>Empresa<input required/></label><label>Responsável<input required/></label><label>E-mail<input required type="email"/></label><label>Plano<select><option>Pro</option><option>Enterprise</option><option>Básico</option></select></label><footer><button type="button" onClick={()=>setModal(false)}>Cancelar</button><button>Ativar cliente</button></footer></form></div>}
+ {toast&&<div className="partner-toast">{toast}</div>}
+ </section></main>
+}

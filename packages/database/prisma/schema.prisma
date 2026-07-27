@@ -1,0 +1,426 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantPlan {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+enum UserRole {
+  OWNER
+  ADMIN
+  SUPERVISOR
+  AGENT
+}
+enum ConvStatus {
+  OPEN
+  PENDING
+  CLOSED
+}
+enum TicketStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+}
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELED
+}
+enum ChannelType {
+  WHATSAPP
+  INSTAGRAM
+  MESSENGER
+  TELEGRAM
+  EMAIL
+  WEBCHAT
+}
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+model Tenant {
+  id           String     @id @default(cuid())
+  slug         String     @unique
+  name         String
+  domain       String?    @unique
+  logoUrl      String?
+  faviconUrl   String?
+  primaryColor String     @default("#3B82F6")
+  accentColor  String     @default("#D8FF72")
+  plan         TenantPlan @default(BASIC)
+  status       TenantStatus @default(TRIAL)
+  trialEndsAt  DateTime?
+  maxUsers     Int        @default(5)
+  maxContacts  Int        @default(500)
+  modules      Json       @default("[]")
+  settings     Json       @default("{}")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  users         User[]
+  contacts      Contact[]
+  deals         Deal[]
+  pipelines     Pipeline[]
+  conversations Conversation[]
+  tickets       Ticket[]
+  departments   Department[]
+  aiAgents      AiAgent[]
+  automations   Automation[]
+  integrations  Integration[]
+  activities    Activity[]
+  tasks         Task[]
+  auditLogs     AuditLog[]
+  channels      ChannelConnection[]
+  apiKeys       ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  campaigns     Campaign[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  email        String
+  passwordHash String
+  name         String
+  role         UserRole @default(AGENT)
+  avatarUrl    String?
+  active       Boolean  @default(true)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, email])
+}
+
+model Department {
+  id       String   @id @default(cuid())
+  tenantId String
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  name     String
+  color    String   @default("#6B7280")
+  users    User[]
+  tickets  Ticket[]
+}
+
+model Pipeline {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  stages    Stage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Stage {
+  id         String   @id @default(cuid())
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  name       String
+  order      Int
+  color      String   @default("#6B7280")
+  deals      Deal[]
+}
+
+model Deal {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  stageId   String
+  stage     Stage    @relation(fields: [stageId], references: [id])
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id])
+  title     String
+  value     Decimal  @default(0) @db.Decimal(14, 2)
+  status    DealStatus @default(OPEN)
+  lostReason String?
+  products  Json?    @default("[]")
+  tags      String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activities Activity[]
+  tasks      Task[]
+  @@unique([tenantId, id])
+}
+
+model Contact {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  name         String
+  email        String?
+  phone        String?
+  tags         String[] @default([])
+  customFields Json?    @default("{}")
+  avatarUrl    String?
+  source       String?
+  company      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  deals         Deal[]
+  conversations Conversation[]
+  tickets       Ticket[]
+  activities    Activity[]
+  @@unique([tenantId, id])
+}
+
+model Conversation {
+  id         String     @id @default(cuid())
+  tenantId   String
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  contactId  String
+  contact    Contact    @relation(fields: [contactId], references: [id])
+  channel    String
+  channelId  String?
+  assignedTo String?
+  status     ConvStatus @default(OPEN)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  messages Message[]
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  from           String
+  agentId        String?
+  content        String
+  contentType    String   @default("text")
+  mediaUrl       String?
+  metadata       Json?    @default("{}")
+  externalId     String?
+  idempotencyKey String?
+  status         MessageStatus @default(QUEUED)
+  createdAt      DateTime @default(now())
+  @@unique([conversationId, externalId])
+  @@unique([conversationId, idempotencyKey])
+}
+
+model Ticket {
+  id           String       @id @default(cuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  protocol     String       @unique @default(cuid())
+  contactId    String?
+  contact      Contact?     @relation(fields: [contactId], references: [id])
+  subject      String
+  status       TicketStatus @default(OPEN)
+  priority     Priority     @default(MEDIUM)
+  departmentId String?
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  assignedTo   String?
+  slaDeadline  DateTime?
+  closedAt     DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model AiAgent {
+  id           String         @id @default(cuid())
+  tenantId     String
+  tenant       Tenant         @relation(fields: [tenantId], references: [id])
+  name         String
+  provider     String         @default("openai")
+  modelId      String         @default("gpt-4o")
+  instructions String
+  personality  Json?          @default("{}")
+  active       Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  knowledgeDocs KnowledgeDoc[]
+}
+
+model KnowledgeDoc {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       AiAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name        String
+  type        String
+  url         String?
+  content     String?
+  embeddingId String?
+  createdAt   DateTime @default(now())
+}
+
+model Automation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  name       String
+  trigger    String
+  conditions Json?    @default("[]")
+  actions    Json     @default("[]")
+  active     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  versions   AutomationVersion[]
+  executions AutomationExecution[]
+}
+
+model Integration {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  provider  String
+  config    Json
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      String
+  content   String
+  userId    String?
+  dealId    String?
+  deal      Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dealId     String?
+  deal       Deal?    @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  title      String
+  dueDate    DateTime?
+  completed  Boolean  @default(false)
+  assignedTo String?
+  createdAt  DateTime @default(now())
+}
+
+model ChannelConnection {
+  id String @id @default(cuid())
+  tenantId String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String
+  channel ChannelType
+  provider String
+  externalId String?
+  credentials Json
+  status String @default("DISCONNECTED")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([tenantId, id])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  tenantId String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId String?
+  action String
+  entity String
+  entityId String?
+  ip String?
+  metadata Json? @default("{}")
+  createdAt DateTime @default(now())
+  @@index([tenantId, createdAt])
+}
+
+model ApiKey {
+  id String @id @default(cuid())
+  tenantId String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String
+  prefix String
+  secretHash String
+  lastUsedAt DateTime?
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+}
+
+model WebhookEndpoint {
+  id String @id @default(cuid())
+  tenantId String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url String
+  secret String
+  events String[]
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AutomationVersion {
+  id String @id @default(cuid())
+  automationId String
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  version Int
+  definition Json
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([automationId, version])
+}
+
+model AutomationExecution {
+  id String @id @default(cuid())
+  tenantId String
+  automationId String
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  version Int
+  idempotencyKey String
+  status String @default("QUEUED")
+  context Json @default("{}")
+  error String?
+  startedAt DateTime?
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([tenantId, idempotencyKey])
+}
+
+model Campaign {
+  id String @id @default(cuid())
+  tenantId String
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name String
+  status String @default("DRAFT")
+  audience Json @default("{}")
+  content Json
+  scheduledAt DateTime?
+  startedAt DateTime?
+  finishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

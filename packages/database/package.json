@@ -1,0 +1,26 @@
+{
+  "name": "@crm/database",
+  "version": "0.0.1",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "node prisma/seed.js",
+    "build": "prisma generate",
+    "typecheck": "prisma validate",
+    "lint": "prisma validate"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.14.0"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}
