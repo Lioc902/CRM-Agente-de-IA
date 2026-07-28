@@ -14,7 +14,10 @@ async function ensureInitialOwner(user: { id: string; email?: string | null; use
     { id: user.id, email: user.email, full_name: String(user.user_metadata.full_name ?? 'ASAX'), role: 'admin' },
     { onConflict: 'id' },
   )
-  if (error) throw new Error('Nao foi possivel preparar o acesso administrativo.')
+  if (error) {
+    const detail = [error.code, error.message].filter(Boolean).join(': ')
+    throw new Error(`Nao foi possivel preparar o acesso administrativo${detail ? ` (${detail})` : '.'}`)
+  }
 }
 
 async function requireAdmin() {
