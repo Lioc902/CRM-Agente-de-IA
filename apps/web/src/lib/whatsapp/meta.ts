@@ -4,6 +4,18 @@ const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID
 
 export const isMetaWhatsAppConfigured = () => Boolean(accessToken && phoneNumberId)
 
+export async function getMetaWhatsAppStatus() {
+  if (!accessToken || !phoneNumberId) return { configured: false, connected: false, message: 'Credenciais da Meta ainda não configuradas.' }
+  try {
+    const response = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=display_phone_number,verified_name`, {
+      headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) return { configured: true, connected: false, message: data?.error?.message ?? 'A Meta recusou a verificação da conexão.' }
+    return { configured: true, connected: true, phone: data?.display_phone_number ?? null, name: data?.verified_name ?? null, message: 'Canal oficial da Meta conectado e verificado.' }
+  } catch { return { configured: true, connected: false, message: 'Não foi possível verificar a conexão com a Meta.' } }
+}
+
 export async function sendMetaWhatsAppText(number: string, text: string) {
   if (!accessToken || !phoneNumberId) throw new Error('META_WHATSAPP_NOT_CONFIGURED')
 
