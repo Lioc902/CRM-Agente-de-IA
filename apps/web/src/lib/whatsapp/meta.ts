@@ -1,7 +1,7 @@
 const graphVersion = process.env.META_GRAPH_API_VERSION ?? 'v25.0'
 const accessToken = process.env.META_WHATSAPP_ACCESS_TOKEN
 const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID
-const businessId = process.env.META_BUSINESS_ID
+const whatsappBusinessAccountId = process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID
 
 export const isMetaWhatsAppConfigured = () => Boolean(accessToken && phoneNumberId)
 
@@ -19,17 +19,9 @@ export async function getMetaWhatsAppStatus() {
 
 export async function subscribeMetaWhatsAppWebhook() {
   if (!accessToken || !phoneNumberId) throw new Error('META_WHATSAPP_NOT_CONFIGURED')
-  if (!businessId) throw new Error('META_BUSINESS_ID_NOT_CONFIGURED')
+  if (!whatsappBusinessAccountId) throw new Error('META_WHATSAPP_BUSINESS_ACCOUNT_ID_NOT_CONFIGURED')
 
-  const accountResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${businessId}/owned_whatsapp_business_accounts?fields=id,phone_numbers.limit(100){id}`, {
-    headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
-  })
-  const accountData = await accountResponse.json().catch(() => null)
-  const account = accountData?.data?.find((item: { phone_numbers?: { data?: Array<{ id?: string }> } }) => item.phone_numbers?.data?.some((phone) => phone.id === phoneNumberId))
-  const wabaId = account?.id
-  if (!accountResponse.ok || !wabaId) throw new Error(accountData?.error?.message ?? 'O token não encontrou a conta do WhatsApp Business deste número.')
-
-  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${wabaId}/subscribed_apps`, {
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${whatsappBusinessAccountId}/subscribed_apps`, {
     method: 'POST', headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
   })
   const data = await response.json().catch(() => null)
