@@ -26,7 +26,7 @@ function credentialToRow(item: StoredCredential) {
 }
 
 async function masterKey() {
-  const configuredSecret = process.env.AI_CREDENTIAL_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY
+  const configuredSecret = process.env.AI_CREDENTIAL_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY_ACTIVE ?? process.env.SUPABASE_SECRET_KEY
   if (configuredSecret) return createHash('sha256').update(configuredSecret).digest()
   if (process.env.NODE_ENV === 'production') throw new Error('Chave de criptografia das credenciais não configurada.')
   await fs.mkdir(runtimeDir, { recursive: true })

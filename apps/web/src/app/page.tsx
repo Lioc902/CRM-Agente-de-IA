@@ -259,7 +259,13 @@ function RealTeam({notify}:{notify:(message:string)=>void}){
   const [open,setOpen]=useState(false)
   const [saving,setSaving]=useState(false)
   const [form,setForm]=useState({name:'',email:'',role:'Atendente'})
-  async function load(){const response=await fetch('/api/team',{cache:'no-store'});const data=await response.json();setMembers(data.members??[])}
+  async function load(){
+    const response=await fetch('/api/team',{cache:'no-store'}), raw=await response.text()
+    let data:{members?:TeamMember[];message?:string}={}
+    try{data=raw?JSON.parse(raw):{message:'A API de equipe não retornou dados.'}}catch{data={message:'A API de equipe retornou uma resposta inválida.'}}
+    if(!response.ok)throw new Error(data.message??'Não foi possível carregar a equipe.')
+    setMembers(data.members??[])
+  }
   useEffect(()=>{load().catch(()=>notify('Não foi possível carregar a equipe'))},[])
   async function save(event:React.FormEvent){
     event.preventDefault();setSaving(true)
