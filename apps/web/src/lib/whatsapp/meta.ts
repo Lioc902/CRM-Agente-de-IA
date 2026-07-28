@@ -1,6 +1,7 @@
 const graphVersion = process.env.META_GRAPH_API_VERSION ?? 'v25.0'
 const accessToken = process.env.META_WHATSAPP_ACCESS_TOKEN
 const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID
+const businessId = process.env.META_BUSINESS_ID
 
 export const isMetaWhatsAppConfigured = () => Boolean(accessToken && phoneNumberId)
 
@@ -18,8 +19,9 @@ export async function getMetaWhatsAppStatus() {
 
 export async function subscribeMetaWhatsAppWebhook() {
   if (!accessToken || !phoneNumberId) throw new Error('META_WHATSAPP_NOT_CONFIGURED')
+  if (!businessId) throw new Error('META_BUSINESS_ID_NOT_CONFIGURED')
 
-  const accountResponse = await fetch(`https://graph.facebook.com/${graphVersion}/me/whatsapp_business_accounts?fields=id,phone_numbers.limit(100){id}`, {
+  const accountResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${businessId}/owned_whatsapp_business_accounts?fields=id,phone_numbers.limit(100){id}`, {
     headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
   })
   const accountData = await accountResponse.json().catch(() => null)
