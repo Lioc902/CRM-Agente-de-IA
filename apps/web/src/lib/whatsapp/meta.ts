@@ -1,7 +1,11 @@
+import { createHash } from 'crypto'
+
 const graphVersion = process.env.META_GRAPH_API_VERSION ?? 'v25.0'
 const accessToken = process.env.META_WHATSAPP_ACCESS_TOKEN
 const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID
 const whatsappBusinessAccountId = process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID
+
+export const getMetaTokenFingerprint = () => accessToken ? createHash('sha256').update(accessToken).digest('hex').slice(0, 12) : null
 
 export const isMetaWhatsAppConfigured = () => Boolean(accessToken && phoneNumberId)
 
