@@ -263,7 +263,7 @@ function RealTeam({notify}:{notify:(message:string)=>void}){
   useEffect(()=>{load().catch(()=>notify('Não foi possível carregar a equipe'))},[])
   async function save(event:React.FormEvent){
     event.preventDefault();setSaving(true)
-    try{const response=await fetch('/api/team',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(form)});const data=await response.json();if(!response.ok)throw new Error(data.message);await load();setOpen(false);setForm({name:'',email:'',role:'Atendente'});notify('Pessoa cadastrada na equipe')}
+    try{const response=await fetch('/api/team',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(form)});const data=await response.json();if(!response.ok)throw new Error(data.message);await load();setOpen(false);setForm({name:'',email:'',role:'Atendente'});notify('Convite enviado por e-mail')}
     catch(error){notify(error instanceof Error?error.message:'Falha ao cadastrar')}finally{setSaving(false)}
   }
   async function remove(member:TeamMember){
@@ -271,7 +271,7 @@ function RealTeam({notify}:{notify:(message:string)=>void}){
     const response=await fetch(`/api/team?id=${encodeURIComponent(member.id)}`,{method:'DELETE'});if(response.ok){await load();notify('Pessoa removida')}else notify('Não foi possível remover')
   }
   return <div className="module">
-    <ModuleHeader onAction={()=>setOpen(true)} title="Equipe" subtitle="PESSOAS CADASTRADAS" action="Cadastrar pessoa"/>
+    <ModuleHeader onAction={()=>setOpen(true)} title="Equipe" subtitle="ACESSOS DA OPERAÇÃO" action="Convidar pessoa"/>
     <div className="module-stats"><Stat label="Pessoas cadastradas" value={String(members.length)}/><Stat label="Administradores" value={String(members.filter(member=>member.role==='Administrador').length)}/><Stat label="Supervisores" value={String(members.filter(member=>member.role==='Supervisor').length)}/></div>
     {members.length?<div className="team-list">{members.map(member=><article key={member.id}><span className="big-avatar">{member.name.slice(0,2).toUpperCase()}</span><div><b>{member.name}</b><small>{member.email}</small></div><em>{member.role}</em><small>Cadastrado em {new Date(member.createdAt).toLocaleDateString('pt-BR')}</small><button title="Remover" onClick={()=>remove(member)}><Trash2 size={15}/></button></article>)}</div>:<EmptyState title="Nenhuma pessoa cadastrada" text="Cadastre os usuários reais que farão parte da operação."/>}
     {open&&<div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setOpen(false)}}><form className="modal" onSubmit={save}><header><div><small>EQUIPE</small><h2>Cadastrar pessoa</h2></div><button type="button" onClick={()=>setOpen(false)}>×</button></header><label>Nome completo<input required value={form.name} onChange={event=>setForm({...form,name:event.target.value})}/></label><label>E-mail<input required type="email" value={form.email} onChange={event=>setForm({...form,email:event.target.value})}/></label><label>Função<select value={form.role} onChange={event=>setForm({...form,role:event.target.value})}><option>Atendente</option><option>Supervisor</option><option>Administrador</option></select></label><p className="modal-note">O cadastro fica salvo neste ambiente. O envio de convite por e-mail ainda não está habilitado.</p><footer><button type="button" onClick={()=>setOpen(false)}>Cancelar</button><button className="primary" disabled={saving}>{saving?'Salvando…':'Salvar pessoa'}</button></footer></form></div>}
