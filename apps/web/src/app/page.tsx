@@ -256,6 +256,7 @@ function RealReports({notify}:{notify:(message:string)=>void}){
 type TeamMember={id:string;name:string;email:string;role:string;createdAt:string}
 function RealTeam({notify}:{notify:(message:string)=>void}){
   const [members,setMembers]=useState<TeamMember[]>([])
+  const [loadError,setLoadError]=useState<string | null>(null)
   const [open,setOpen]=useState(false)
   const [saving,setSaving]=useState(false)
   const [form,setForm]=useState({name:'',email:'',role:'Atendente'})
@@ -264,9 +265,9 @@ function RealTeam({notify}:{notify:(message:string)=>void}){
     let data:{members?:TeamMember[];message?:string}={}
     try{data=raw?JSON.parse(raw):{message:'A API de equipe não retornou dados.'}}catch{data={message:'A API de equipe retornou uma resposta inválida.'}}
     if(!response.ok)throw new Error(data.message??'Não foi possível carregar a equipe.')
-    setMembers(data.members??[])
+    setMembers(data.members??[]);setLoadError(null)
   }
-  useEffect(()=>{load().catch(()=>notify('Não foi possível carregar a equipe'))},[])
+  useEffect(()=>{load().catch(error=>{const message=error instanceof Error?error.message:'Não foi possível carregar a equipe';setLoadError(message);notify(message)})},[])
   async function save(event:React.FormEvent){
     event.preventDefault();setSaving(true)
     try{const response=await fetch('/api/team',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(form)});const data=await response.json();if(!response.ok)throw new Error(data.message);await load();setOpen(false);setForm({name:'',email:'',role:'Atendente'});notify('Convite enviado por e-mail')}
@@ -279,7 +280,7 @@ function RealTeam({notify}:{notify:(message:string)=>void}){
   return <div className="module">
     <ModuleHeader onAction={()=>setOpen(true)} title="Equipe" subtitle="ACESSOS DA OPERAÇÃO" action="Convidar pessoa"/>
     <div className="module-stats"><Stat label="Pessoas cadastradas" value={String(members.length)}/><Stat label="Administradores" value={String(members.filter(member=>member.role==='Administrador').length)}/><Stat label="Supervisores" value={String(members.filter(member=>member.role==='Supervisor').length)}/></div>
-    {members.length?<div className="team-list">{members.map(member=><article key={member.id}><span className="big-avatar">{member.name.slice(0,2).toUpperCase()}</span><div><b>{member.name}</b><small>{member.email}</small></div><em>{member.role}</em><small>Cadastrado em {new Date(member.createdAt).toLocaleDateString('pt-BR')}</small><button title="Remover" onClick={()=>remove(member)}><Trash2 size={15}/></button></article>)}</div>:<EmptyState title="Nenhuma pessoa cadastrada" text="Cadastre os usuários reais que farão parte da operação."/>}
+    {loadError?<div className="empty-state" role="alert"><Activity size={28}/><b>Não foi possível carregar a equipe</b><p>{loadError}</p><button className="btn secondary" onClick={()=>load().catch(error=>setLoadError(error instanceof Error?error.message:'Não foi possível carregar a equipe'))}>Tentar novamente</button></div>:members.length?<div className="team-list">{members.map(member=><article key={member.id}><span className="big-avatar">{member.name.slice(0,2).toUpperCase()}</span><div><b>{member.name}</b><small>{member.email}</small></div><em>{member.role}</em><small>Cadastrado em {new Date(member.createdAt).toLocaleDateString('pt-BR')}</small><button title="Remover" onClick={()=>remove(member)}><Trash2 size={15}/></button></article>)}</div>:<EmptyState title="Nenhuma pessoa cadastrada" text="Cadastre os usuários reais que farão parte da operação."/>}
     {open&&<div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setOpen(false)}}><form className="modal" onSubmit={save}><header><div><small>EQUIPE</small><h2>Convidar pessoa</h2></div><button type="button" onClick={()=>setOpen(false)}>×</button></header><label>Nome completo<input required value={form.name} onChange={event=>setForm({...form,name:event.target.value})}/></label><label>E-mail<input required type="email" value={form.email} onChange={event=>setForm({...form,email:event.target.value})}/></label><label>Função<select value={form.role} onChange={event=>setForm({...form,role:event.target.value})}><option>Atendente</option><option>Supervisor</option><option>Administrador</option></select></label><p className="modal-note">A pessoa receberá um e-mail seguro. Ao abrir o link, ela define a própria senha e entra com a função escolhida.</p><footer><button type="button" onClick={()=>setOpen(false)}>Cancelar</button><button className="primary" disabled={saving}>{saving?'Enviando…':'Enviar convite'}</button></footer></form></div>}
   </div>
 }
