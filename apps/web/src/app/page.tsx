@@ -1169,6 +1169,7 @@ function WhatsAppChannels({ notify }: { notify: (message: string) => void }) {
   const [syncingContacts, setSyncingContacts] = useState(false)
   const [meta, setMeta] = useState<{ configured:boolean; connected:boolean; phone?:string|null; name?:string|null; message:string }>({ configured:false, connected:false, message:'Verificando a Meta...' })
   const [checkingMeta, setCheckingMeta] = useState(false)
+  const [subscribingMeta, setSubscribingMeta] = useState(false)
 
   async function checkMetaStatus(showNotice = false) {
     setCheckingMeta(true)
@@ -1179,6 +1180,17 @@ function WhatsAppChannels({ notify }: { notify: (message: string) => void }) {
       if (showNotice) notify(String(data.message ?? 'Verificação concluída.'))
     } catch { setMeta({ configured:false, connected:false, message:'Não foi possível consultar a Meta.' }); if (showNotice) notify('Não foi possível consultar a Meta.') }
     finally { setCheckingMeta(false) }
+  }
+
+  async function subscribeMeta() {
+    setSubscribingMeta(true)
+    try {
+      const response = await fetch('/api/meta/whatsapp/subscribe', { method: 'POST' })
+      const data = await response.json().catch(() => ({ message:'A Meta não retornou uma resposta válida.' }))
+      if (!response.ok) throw new Error(String(data.message ?? 'Não foi possível ativar o recebimento.'))
+      notify(String(data.message ?? 'Recebimento ativado.'))
+    } catch (error) { notify(error instanceof Error ? error.message : 'Não foi possível ativar o recebimento da Meta.') }
+    finally { setSubscribingMeta(false) }
   }
 
   async function checkStatus(silent = false) {
@@ -1273,7 +1285,7 @@ function WhatsAppChannels({ notify }: { notify: (message: string) => void }) {
       </article>
       <article className="channel-card meta-channel-card">
         <div className="channel-head"><div className="whatsapp-mark"><MessageCircle size={22}/></div><div><h2>WhatsApp Business API</h2><p>Meta Cloud API · canal oficial</p></div><span className={`connection-state ${meta.connected ? 'connected' : 'disconnected'}`}><i/>{meta.connected ? 'Conectado' : 'Não conectado'}</span></div>
-        <div className="channel-body"><div className="qr-area"><div className={meta.connected ? 'connection-success' : 'qr-placeholder'}><Phone size={48}/><b>{meta.connected ? meta.name || 'Meta verificada' : 'Meta ainda não verificada'}</b><span>{meta.connected ? meta.phone || 'Número oficial conectado' : 'A Cloud API não usa QR Code: ela é vinculada pela conta Meta.'}</span></div></div><div className="connect-guide"><span className="eyebrow">CANAL OFICIAL</span><h3>{meta.connected ? 'Meta pronta para uso' : 'Conexão da Meta'}</h3><p>{meta.message}</p>{!meta.configured && <ol><li>Cadastre o número no Meta for Developers.</li><li>Crie um token de sistema.</li><li>Informe o Phone Number ID e token nas variáveis protegidas.</li></ol>}<button className="primary connect-button" disabled={checkingMeta} onClick={()=>checkMetaStatus(true)}>{checkingMeta ? 'Verificando...' : 'Verificar conexão Meta'}</button><small>Esse canal é o oficial da Meta. Não exige manter um celular ou QR Code conectado.</small></div></div>
+        <div className="channel-body"><div className="qr-area"><div className={meta.connected ? 'connection-success' : 'qr-placeholder'}><Phone size={48}/><b>{meta.connected ? meta.name || 'Meta verificada' : 'Meta ainda não verificada'}</b><span>{meta.connected ? meta.phone || 'Número oficial conectado' : 'A Cloud API não usa QR Code: ela é vinculada pela conta Meta.'}</span></div></div><div className="connect-guide"><span className="eyebrow">CANAL OFICIAL</span><h3>{meta.connected ? 'Meta pronta para uso' : 'Conexão da Meta'}</h3><p>{meta.message}</p>{!meta.configured && <ol><li>Cadastre o número no Meta for Developers.</li><li>Crie um token de sistema.</li><li>Informe o Phone Number ID e token nas variáveis protegidas.</li></ol>}<button className="primary connect-button" disabled={checkingMeta} onClick={()=>checkMetaStatus(true)}>{checkingMeta ? 'Verificando...' : 'Verificar conexão Meta'}</button>{meta.connected && <button className="secondary connect-button" disabled={subscribingMeta} onClick={subscribeMeta}>{subscribingMeta ? 'Ativando recebimento...' : 'Ativar recebimento oficial'}</button>}<small>Esse canal é o oficial da Meta. Não exige manter um celular ou QR Code conectado.</small></div></div>
       </article>
       <aside className="channel-info"><h3>Recursos ativos deste canal</h3><p><CheckCircle2/> Envio e recebimento de mensagens</p><p><CheckCircle2/> Imagens, áudios e documentos</p><p><CheckCircle2/> Sincronização de contatos disponíveis</p><p><CheckCircle2/> Automações e agente de IA</p><hr/><button className="sync-contacts-button" disabled={syncingContacts} onClick={syncContacts}>{syncingContacts ? 'Preparando...' : 'Sincronizar contatos salvos'}</button><small>Importa os contatos que o WhatsApp disponibilizar para a sessão conectada.</small></aside>
     </section>

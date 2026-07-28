@@ -16,6 +16,24 @@ export async function getMetaWhatsAppStatus() {
   } catch { return { configured: true, connected: false, message: 'Não foi possível verificar a conexão com a Meta.' } }
 }
 
+export async function subscribeMetaWhatsAppWebhook() {
+  if (!accessToken || !phoneNumberId) throw new Error('META_WHATSAPP_NOT_CONFIGURED')
+
+  const phoneResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=whatsapp_business_account`, {
+    headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
+  })
+  const phoneData = await phoneResponse.json().catch(() => null)
+  const wabaId = phoneData?.whatsapp_business_account?.id
+  if (!phoneResponse.ok || !wabaId) throw new Error(phoneData?.error?.message ?? 'Não foi possível localizar a conta do WhatsApp Business.')
+
+  const response = await fetch(`https://graph.facebook.com/${graphVersion}/${wabaId}/subscribed_apps`, {
+    method: 'POST', headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok || !data?.success) throw new Error(data?.error?.message ?? 'A Meta recusou a assinatura de eventos.')
+  return { subscribed: true, message: 'Recebimento de mensagens ativado na Meta.' }
+}
+
 export async function sendMetaWhatsAppText(number: string, text: string) {
   if (!accessToken || !phoneNumberId) throw new Error('META_WHATSAPP_NOT_CONFIGURED')
 
