@@ -1,0 +1,2 @@
+import { AuthForm } from '../../components/auth-form'
+export default function RecoveryPage() { return <main className="asax-auth-shell"><section className="asax-auth-intro"><img src="/asax-symbol.png" alt="ASAX" /><p>ASAX CRM</p><h1>Seu acesso continua seguro.</h1><span>Recupere a senha com um link único enviado para seu e-mail.</span></section><section className="asax-auth-card"><AuthForm mode="recovery" /></section></main> }

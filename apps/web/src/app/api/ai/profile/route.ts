@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
+import { repairTextEncoding } from '../../../../lib/text-encoding'
 
 const profilePath = path.join(process.cwd(), '.runtime', 'ai-profile.json')
 const defaultQuestion = (field:string) => ({
@@ -29,7 +30,7 @@ const defaults = {
 
 export async function GET() {
   try {
-    const saved=JSON.parse(await fs.readFile(profilePath,'utf8'))
+    const saved=repairTextEncoding(JSON.parse(await fs.readFile(profilePath,'utf8')))
     const legacyOffer=(saved.plans||saved.prices)?[{id:'legacy',name:saved.plans||'Plano principal',description:saved.plans||'',price:saved.prices||'',billing:'Conforme proposta',conditions:''}]:[]
     const qualificationFields=Array.isArray(saved.qualificationFields)?saved.qualificationFields:String(saved.requiredQuestions??'').split(/\r?\n/).filter(Boolean)
     const qualificationQuestions=Array.isArray(saved.qualificationQuestions)&&saved.qualificationQuestions.length
@@ -41,7 +42,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  const body = repairTextEncoding(await request.json())
   const profile = {
     companyName:String(body.companyName??''),agentName:String(body.agentName??''),role:String(body.role??''),tone:String(body.tone??''),
     companyContext:String(body.companyContext??''),salesRules:String(body.salesRules??''),forbiddenTopics:String(body.forbiddenTopics??''),handoffRules:String(body.handoffRules??''),

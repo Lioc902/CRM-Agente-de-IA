@@ -1,0 +1,2 @@
+import { AuthForm } from '../../components/auth-form'
+export default function ResetPage() { return <main className="asax-auth-shell"><section className="asax-auth-intro"><img src="/asax-symbol.png" alt="ASAX" /><p>ASAX CRM</p><h1>Defina uma nova senha.</h1><span>Use uma combinação forte e exclusiva para proteger sua operação.</span></section><section className="asax-auth-card"><AuthForm mode="update" /></section></main> }

@@ -1,0 +1,2 @@
+import { AuthForm } from '../../components/auth-form'
+export default function CadastroPage() { return <main className="asax-auth-shell"><section className="asax-auth-intro"><img src="/asax-symbol.png" alt="ASAX" /><p>ASAX CRM</p><h1>Comece a estruturar suas vendas.</h1><span>Crie seu acesso para entrar na operação ASAX.</span></section><section className="asax-auth-card"><AuthForm mode="signup" /></section></main> }

@@ -4,12 +4,14 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import { promises as fs } from 'fs'
 import path from 'path'
 
-export type AICredentialProvider = 'gemini' | 'openai'
+export type AICredentialProvider = 'gemini' | 'openai' | 'custom'
 
 type StoredCredential = {
   id: string
   name: string
   provider: AICredentialProvider
+  baseUrl?: string
+  model?: string
   encryptedKey: string
   iv: string
   tag: string
@@ -65,7 +67,7 @@ export async function listCredentials() {
   return (await readVault()).map(publicView)
 }
 
-export async function createCredential(input: { name: string; provider: AICredentialProvider; apiKey: string }) {
+export async function createCredential(input: { name: string; provider: AICredentialProvider; apiKey: string; baseUrl?: string; model?: string }) {
   const key = await masterKey()
   if (key.length !== 32) throw new Error('Chave mestra local inválida')
   const iv = randomBytes(12)
@@ -76,6 +78,8 @@ export async function createCredential(input: { name: string; provider: AICreden
     id: `credential-${Date.now()}-${randomBytes(3).toString('hex')}`,
     name: input.name.trim(),
     provider: input.provider,
+    baseUrl: input.baseUrl?.replace(/\/+$/,''),
+    model: input.model?.trim(),
     encryptedKey: encrypted.toString('base64'),
     iv: iv.toString('base64'),
     tag: cipher.getAuthTag().toString('base64'),
@@ -107,7 +111,7 @@ export async function getCredentialSecret(id: string) {
     decipher.update(Buffer.from(credential.encryptedKey, 'base64')),
     decipher.final(),
   ]).toString('utf8')
-  return { id: credential.id, name: credential.name, provider: credential.provider, apiKey }
+  return { id: credential.id, name: credential.name, provider: credential.provider, baseUrl:credential.baseUrl, model:credential.model, apiKey }
 }
 
 export async function testCredential(id: string) {
@@ -119,7 +123,7 @@ export async function testCredential(id: string) {
           headers: { 'x-goog-api-key': credential.apiKey },
           cache: 'no-store',
         })
-      : await fetch('https://api.openai.com/v1/models', {
+      : await fetch(`${credential.provider==='custom'?credential.baseUrl:'https://api.openai.com/v1'}/models`, {
           headers: { authorization: `Bearer ${credential.apiKey}` },
           cache: 'no-store',
         })

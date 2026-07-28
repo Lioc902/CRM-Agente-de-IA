@@ -1,11 +1,12 @@
 'use client'
 
 import {
-  Activity, Bot, ChevronDown, CircleHelp, ContactRound, LayoutDashboard,
+  Activity, Bot, CircleHelp, ContactRound, LayoutDashboard,
   MessageCircle, MoreHorizontal, Plus, Search, Settings, Sparkles,
   Target, Users, Workflow, Send, Phone, Paperclip, Clock3, CheckCircle2,
   Plug, Megaphone, FileText, BrainCircuit, Play, GitBranch, ShieldCheck,
-  Trash2, ArrowLeft, ArrowRight, Timer, Tag, ListChecks, Ticket, Mic, Smile, X, Square, Pause, UploadCloud
+  Trash2, ArrowLeft, ArrowRight, Timer, Tag, ListChecks, Ticket, Mic, Smile, X, Square, Pause, UploadCloud,
+  Moon, Sun
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
@@ -32,13 +33,21 @@ export default function Dashboard() {
   const [query, setQuery] = useState('')
   const [dragged, setDragged] = useState<{ stage: string; deal: Deal } | null>(null)
   const [modal, setModal] = useState<string | null>(null)
+  const [modalStage, setModalStage] = useState<string | undefined>()
   const [toast, setToast] = useState<string | null>(null)
   const [aiUsage,setAiUsage]=useState({totalTokens:0,calls:0})
+  const [theme,setTheme]=useState<'light'|'dark'>('light')
   const total = useMemo(() => stages.flatMap(s => s.deals).reduce((sum, d) => sum + d.value, 0), [stages])
 
   useEffect(() => {
     const saved = localStorage.getItem('asax.pipeline.stages')
     if (saved) setStages(JSON.parse(saved))
+  }, [])
+  useEffect(() => {
+    const saved=localStorage.getItem('asax.theme')
+    const next=saved==='dark'||saved==='light' ? saved : (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')
+    setTheme(next)
+    document.documentElement.dataset.theme=next
   }, [])
   useEffect(() => {
     async function syncWhatsAppLeads() {
@@ -65,6 +74,10 @@ export default function Dashboard() {
   useEffect(() => { localStorage.setItem('asax.pipeline.stages', JSON.stringify(stages)) }, [stages])
   useEffect(()=>{const load=()=>fetch('/api/ai/usage',{cache:'no-store'}).then(response=>response.json()).then(setAiUsage).catch(()=>{});load();const timer=window.setInterval(load,10000);return()=>window.clearInterval(timer)},[])
   function notify(message:string){setToast(message);setTimeout(()=>setToast(null),2600)}
+  function toggleTheme(){
+    const next=theme==='light'?'dark':'light'
+    setTheme(next);localStorage.setItem('asax.theme',next);document.documentElement.dataset.theme=next
+  }
 
   function drop(target: string) {
     if (!dragged || dragged.stage === target) return
@@ -81,18 +94,32 @@ export default function Dashboard() {
     const stageId = data.stage || stages[0].id
     const deal: Deal = { id: Date.now(), name: data.name, company: data.company || 'Sem empresa', value: Number(data.value || 0), age: 'agora', tag: data.tag || 'Novo', color: '#d8ff72' }
     setStages(current => current.map(stage => stage.id === stageId ? {...stage,deals:[deal,...stage.deals]} : stage))
-    setModal(null); notify('Negócio criado com sucesso')
+    setModal(null);setModalStage(undefined);notify('Negócio criado com sucesso')
+  }
+  async function removeDeal(deal: Deal) {
+    if (!window.confirm(`Excluir ${deal.name} do CRM? O contato e as mensagens do WhatsApp não serão apagados.`)) return
+    try {
+      if (typeof deal.id === 'string') {
+        const response = await fetch(`/api/crm/leads?id=${encodeURIComponent(deal.id)}`, { method: 'DELETE' })
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.message)
+      }
+      setStages(current => current.map(stage => ({ ...stage, deals: stage.deals.filter(item => String(item.id) !== String(deal.id)) })))
+      notify('Lead removido do CRM')
+    } catch (error) { notify(error instanceof Error ? error.message : 'Não foi possível remover o lead') }
   }
 
   return (
     <main className="shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">A</span><div><b>ASAX</b><small>Revenue OS</small></div></div>
-        <nav>{nav.map(([Icon, label]) => <button onClick={() => setActive(label)} className={label === active ? 'active' : ''} key={label}><Icon size={18}/><span>{label}</span>{label === 'Conversas' && <em>8</em>}</button>)}</nav>
+        <div className="brand"><span className="brand-symbol" aria-label="ASAX"/><div><b>ASAX</b><small>CRM inteligente</small></div></div>
+        <nav>{nav.map(([Icon, label]) => <button onClick={() => setActive(label)} className={label === active ? 'active' : ''} key={label}><Icon size={18}/><span>{label}</span></button>)}</nav>
         <div className="sidebar-bottom">
           <div className="ai-usage"><Sparkles size={16}/><div><span>Uso real de IA</span><div className="meter"><i style={{width:`${Math.min(100,Math.max(2,aiUsage.totalTokens/1000))}%`}}/></div><small>{aiUsage.totalTokens.toLocaleString('pt-BR')} tokens · {aiUsage.calls} chamadas</small></div></div>
-          <button><CircleHelp size={18}/> Central de ajuda</button><button onClick={() => setActive('Configurações')}><Settings size={18}/> Configurações</button>
-          <div className="profile"><span>LM</span><div><b>Lucas Martins</b><small>Administrador</small></div><MoreHorizontal size={18}/></div>
+          <button onClick={toggleTheme} title={`Ativar modo ${theme==='light'?'escuro':'claro'}`}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}<span>Modo {theme==='light'?'escuro':'claro'}</span></button>
+          <button onClick={()=>window.open('https://wa.me/556191537760?text=Ol%C3%A1%2C%20preciso%20de%20ajuda%20com%20o%20ASAX.','_blank','noopener,noreferrer')}><CircleHelp size={18}/> Central de ajuda</button><button onClick={() => setActive('Configurações')}><Settings size={18}/> Configurações</button>
+          <div className="profile"><span>AS</span><div><b>ASAX</b><small>Administrador local</small></div></div>
+          <div className="brand-footer-signature" aria-label="ASAX · Automation, Solutions and Artificial Intelligence"/>
         </div>
       </aside>
 
@@ -104,51 +131,44 @@ export default function Dashboard() {
         </header>
 
         <section className="summary">
-          <div><small>Pipeline em aberto</small><strong>{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span className="up">↑ 18,4%</span></div>
-          <div><small>Negócios ativos</small><strong>{stages.flatMap(s => s.deals).length}</strong><span>este mês</span></div>
-          <div><small>Conversão média</small><strong>31,8%</strong><span className="up">↑ 4,2%</span></div>
-          <div className="pulse"><span><i/> IA em operação</span><b>12 leads qualificados hoje</b></div>
+          <div><small>Pipeline em aberto</small><strong>{total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong><span>valor registrado</span></div>
+          <div><small>Negócios ativos</small><strong>{stages.flatMap(s => s.deals).length}</strong><span>no pipeline</span></div>
+          <div><small>Em qualificação</small><strong>{stages.find(s=>s.id==='qualificacao')?.deals.length??0}</strong><span>negócios</span></div>
+          <div className="pulse"><span><i/> Uso real de IA</span><b>{aiUsage.calls} chamadas · {aiUsage.totalTokens.toLocaleString('pt-BR')} tokens</b></div>
         </section>
 
         <div className="toolbar">
           <div className="search"><Search size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar negócio ou empresa..."/></div>
-          <button>Pipeline principal <ChevronDown size={15}/></button><button>Todos responsáveis <ChevronDown size={15}/></button>
-          <span className="spacer"/><button className="icon"><Settings size={17}/></button>
+          <span className="toolbar-chip">Pipeline principal</span>
+          <span className="spacer"/>
         </div>
 
         <section className="board">
           {stages.map(stage => {
             const deals = stage.deals.filter(d => `${d.name} ${d.company}`.toLowerCase().includes(query.toLowerCase()))
             const stageTotal = stage.deals.reduce((sum, d) => sum + d.value, 0)
-            return <div className="column" key={stage.id} onDragOver={e => e.preventDefault()} onDrop={() => drop(stage.id)}>
-              <div className="column-head"><span style={{'--accent': stage.accent} as React.CSSProperties}>{stage.label}</span><b>{stage.deals.length}</b><button><Plus size={15}/></button></div>
+            return <div className="column" style={{'--accent':stage.accent} as React.CSSProperties} key={stage.id} onDragOver={e => e.preventDefault()} onDrop={() => drop(stage.id)}>
+              <div className="column-head"><span>{stage.label}</span><b>{stage.deals.length}</b><button title={`Adicionar em ${stage.label}`} onClick={()=>{setModalStage(stage.id);setModal('Negócios')}}><Plus size={15}/></button></div>
               <small className="column-total">{stageTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</small>
               <div className="cards">
                 {deals.map(deal => <article draggable onDoubleClick={()=>{if(deal.number){localStorage.setItem('nexo.openConversation',`${deal.number}@s.whatsapp.net`);setActive('Conversas')}}} onDragStart={() => setDragged({stage: stage.id, deal})} key={deal.id} title={deal.number?'Clique duas vezes para conversar no WhatsApp':'Arraste para mudar de etapa'}>
-                  <div className="card-top"><span className="tag" style={{'--tag': deal.color} as React.CSSProperties}>{deal.tag}</span><button><MoreHorizontal size={17}/></button></div>
+                  <div className="card-top"><span className="tag" style={{'--tag': deal.color} as React.CSSProperties}>{deal.tag}</span>{deal.number&&<button title="Abrir conversa" onClick={(event)=>{event.stopPropagation();localStorage.setItem('nexo.openConversation',`${deal.number}@s.whatsapp.net`);setActive('Conversas')}}><MessageCircle size={16}/></button>}<button className="delete-deal" title="Excluir lead do CRM" onClick={(event)=>{event.stopPropagation();removeDeal(deal)}}><Trash2 size={15}/></button></div>
                   <h3>{deal.name}</h3><p>{deal.company}</p>
                   <div className="value">{deal.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                   <footer><span className="avatar">{deal.name.split(' ').map(n => n[0]).join('').slice(0,2)}</span><small>{deal.age}</small><MessageCircle size={14}/></footer>
                 </article>)}
-                <button onClick={()=>setModal('Negócios')} className="add-card"><Plus size={15}/> Adicionar negócio</button>
+                <button onClick={()=>{setModalStage(stage.id);setModal('Negócios')}} className="add-card"><Plus size={15}/> Adicionar negócio</button>
               </div>
             </div>
           })}
         </section>
         </>}
       </section>
-      {modal && <ActionModal kind={modal} stages={stages} onClose={()=>setModal(null)} onDeal={createDeal} onDone={(message)=>{setModal(null);notify(message)}}/>}
+      {modal==='Negócios' && <ActionModal kind={modal} stages={stages} initialStage={modalStage} onClose={()=>{setModal(null);setModalStage(undefined)}} onDeal={createDeal} onDone={(message)=>{setModal(null);notify(message)}}/>}
       {toast && <div className="toast"><CheckCircle2 size={16}/>{toast}</div>}
     </main>
   )
 }
-
-const conversations = [
-  ['Marina Costa', 'Tenho interesse no plano Pro', 'agora', 'MC'],
-  ['Rafael Nunes', 'Pode me enviar a proposta?', '4 min', 'RN'],
-  ['Bianca Lima', 'Áudio · 0:38', '12 min', 'BL'],
-  ['Gustavo Reis', 'Fechado! Como iniciamos?', '22 min', 'GR'],
-]
 
 function ModulePage({ active,onAction,onNavigate,notify }: { active: string;onAction:()=>void;onNavigate:(module:string)=>void;notify:(message:string)=>void }) {
   if (active === 'Canais') return <WhatsAppChannels notify={notify}/>
@@ -162,22 +182,103 @@ function ModulePage({ active,onAction,onNavigate,notify }: { active: string;onAc
 
   if (active === 'Contatos') return <RealContacts notify={notify} onNavigate={onNavigate}/>
 
-  if (active === 'Equipe') return <div className="module"><ModuleHeader onAction={onAction} title="Equipe" subtitle="PESSOAS E OPERAÇÃO" action="Convidar pessoa"/>
-    <div className="module-stats"><Stat label="Pessoas online" value="12"/><Stat label="Tickets em atendimento" value="48"/><Stat label="Tempo médio de resposta" value="1m 42s"/></div>
-    <ResourceTable rows={[['Lucas Martins','Administrador','Online','32 conversas'],['Ana Beatriz','Vendas','Online','28 conversas'],['Carlos Souza','Suporte','Ausente','19 conversas'],['Fernanda Lima','Customer Success','Online','24 conversas']]}/>
-  </div>
+  if (active === 'Equipe') return <RealTeam notify={notify}/>
+  if (active === 'Relatórios') return <RealReports notify={notify}/>
+  return <RealOverview/>
+}
 
-  if (active === 'Relatórios') return <div className="module"><ModuleHeader onAction={()=>notify('Relatório CSV gerado no modo de demonstração')} title="Relatórios" subtitle="INTELIGÊNCIA DE RECEITA" action="Exportar relatório"/>
-    <div className="module-stats"><Stat label="Receita em pipeline" value="R$ 78,4 mil"/><Stat label="Conversão" value="31,8%"/><Stat label="Tempo de 1ª resposta" value="1m 42s"/><Stat label="SLA cumprido" value="96,2%"/></div>
-    <div className="charts"><div><h3>Conversas por canal</h3><div className="bars">{[72,56,39,28,64,84,76].map((h,i)=><i key={i} style={{height:`${h}%`}}/> )}</div><small>SEG&nbsp;&nbsp;&nbsp; TER&nbsp;&nbsp;&nbsp; QUA&nbsp;&nbsp;&nbsp; QUI&nbsp;&nbsp;&nbsp; SEX&nbsp;&nbsp;&nbsp; SÁB&nbsp;&nbsp;&nbsp; DOM</small></div><div><h3>Origem dos negócios</h3>{[['WhatsApp','48%'],['Instagram','26%'],['Formulários','16%'],['Indicação','10%']].map(r=><p key={r[0]}><span>{r[0]}</span><b>{r[1]}</b></p>)}</div></div>
-  </div>
+type OpsMessage={id:string;remoteJid:string;fromMe:boolean;pushName?:string|null;text:string;timestamp:number}
+type OpsLead={id:string|number;name:string;company?:string;value?:number;stage?:string;tag?:string;number?:string}
+type OpsSnapshot={contacts:RealContact[];messages:OpsMessage[];leads:OpsLead[];usage:{totalTokens:number;calls:number};automation:{enabled:boolean;name:string;nodes?:unknown[]}}
 
-  return <div className="module"><ModuleHeader onAction={onAction} title="Visão geral" subtitle="CENTRAL DE OPERAÇÕES" action="Personalizar painel"/>
-    <div className="welcome"><div><span>Bom dia, Lucas</span><h2>Sua operação está saudável.</h2><p>A IA qualificou 12 leads e sua equipe respondeu 96% das conversas dentro do SLA.</p></div><ShieldCheck size={80}/></div>
-    <div className="module-stats"><Stat label="Receita em pipeline" value="R$ 78,4 mil"/><Stat label="Conversas abertas" value="48"/><Stat label="Novos contatos" value="126"/><Stat label="Automações executadas" value="8.429"/></div>
-    <ResourceTable rows={[['Lead qualificado pela IA','Marina Costa · Orbe Studio','Há 2 min','Negócio criado'],['Proposta visualizada','Joana Freire · Atlas RH','Há 18 min','Follow-up agendado'],['Ticket resolvido','Rafael Nunes · Clínica Vitta','Há 32 min','SLA cumprido'],['Automação concluída','Recuperação de carrinho','Há 1 h','Mensagem entregue']]}/>
+function useOperationalSnapshot(){
+  const [snapshot,setSnapshot]=useState<OpsSnapshot>({contacts:[],messages:[],leads:[],usage:{totalTokens:0,calls:0},automation:{enabled:false,name:'Sem automação',nodes:[]}})
+  const [loading,setLoading]=useState(true)
+  useEffect(()=>{
+    let alive=true
+    async function load(){
+      const read=async(url:string)=>{try{const response=await fetch(url,{cache:'no-store'});return response.ok?await response.json():{}}catch{return {}}}
+      const [contacts,messages,leads,usage,automation]=await Promise.all([
+        read('/api/whatsapp/contacts'),read('/api/whatsapp/messages'),read('/api/crm/leads'),read('/api/ai/usage'),read('/api/whatsapp/automation'),
+      ])
+      if(alive)setSnapshot({
+        contacts:contacts.contacts??[],messages:messages.messages??[],leads:leads.leads??[],
+        usage:{totalTokens:Number(usage.totalTokens??0),calls:Number(usage.calls??0)},
+        automation:{enabled:Boolean(automation.enabled),name:String(automation.name??'Sem automação'),nodes:automation.nodes??[]},
+      })
+      if(alive)setLoading(false)
+    }
+    load();const timer=window.setInterval(load,10000)
+    return()=>{alive=false;window.clearInterval(timer)}
+  },[])
+  return {snapshot,loading}
+}
+
+function RealOverview(){
+  const {snapshot,loading}=useOperationalSnapshot()
+  const conversations=new Set(snapshot.messages.map(message=>message.remoteJid)).size
+  const pipeline=snapshot.leads.reduce((sum,lead)=>sum+Number(lead.value??0),0)
+  const recent=[...snapshot.messages].sort((a,b)=>b.timestamp-a.timestamp).slice(0,6)
+  return <div className="module">
+    <header><div><span className="eyebrow">CENTRAL DE OPERAÇÕES</span><h1>Visão geral</h1></div><span className="live-data"><i/>Dados reais · atualização automática</span></header>
+    <div className="welcome real-welcome"><div><span>ASAX CRM</span><h2>{loading?'Carregando sua operação…':'Resumo operacional atual'}</h2><p>Este painel mostra apenas registros encontrados no WhatsApp, CRM, automações e uso da IA.</p></div><Activity size={72}/></div>
+    <div className="module-stats"><Stat label="Pipeline registrado" value={pipeline.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}/><Stat label="Conversas com mensagens" value={String(conversations)}/><Stat label="Contatos sincronizados" value={String(snapshot.contacts.length)}/><Stat label="Chamadas de IA" value={String(snapshot.usage.calls)}/></div>
+    <section className="data-section"><header><div><h3>Atividade recente</h3><p>Últimas mensagens realmente localizadas no canal conectado.</p></div></header>
+      {recent.length?<ResourceTable rows={recent.map(message=>[
+        message.fromMe?'Mensagem enviada':'Mensagem recebida',
+        message.pushName||message.remoteJid.replace(/@.*/, ''),
+        message.text,
+        message.timestamp?new Date(message.timestamp*1000).toLocaleString('pt-BR'):'Sem horário',
+      ])}/>:<EmptyState title="Nenhuma atividade encontrada" text="As mensagens novas do WhatsApp aparecerão aqui quando chegarem ao sistema."/>}
+    </section>
   </div>
 }
+
+function RealReports({notify}:{notify:(message:string)=>void}){
+  const {snapshot,loading}=useOperationalSnapshot()
+  const days=Array.from({length:7},(_,index)=>{const date=new Date();date.setHours(0,0,0,0);date.setDate(date.getDate()-(6-index));return date})
+  const daily=days.map(day=>snapshot.messages.filter(message=>{const date=new Date(message.timestamp*1000);return date.toDateString()===day.toDateString()}).length)
+  const max=Math.max(1,...daily)
+  const stageRows=['entrada','qualificacao','proposta','fechamento'].map(stage=>({stage,count:snapshot.leads.filter(lead=>(lead.stage||'entrada')===stage).length}))
+  const pipeline=snapshot.leads.reduce((sum,lead)=>sum+Number(lead.value??0),0)
+  function exportCsv(){
+    const rows=[['Métrica','Valor'],['Contatos',snapshot.contacts.length],['Conversas',new Set(snapshot.messages.map(message=>message.remoteJid)).size],['Mensagens',snapshot.messages.length],['Leads',snapshot.leads.length],['Pipeline',pipeline],['Chamadas de IA',snapshot.usage.calls],['Tokens de IA',snapshot.usage.totalTokens]]
+    const csv=rows.map(row=>row.map(cell=>`"${String(cell).replaceAll('"','""')}"`).join(';')).join('\n')
+    const link=document.createElement('a');link.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));link.download=`asax-relatorio-${new Date().toISOString().slice(0,10)}.csv`;link.click();URL.revokeObjectURL(link.href);notify('Relatório real exportado')
+  }
+  return <div className="module">
+    <ModuleHeader onAction={exportCsv} title="Relatórios" subtitle="DADOS OPERACIONAIS REAIS" action="Exportar CSV"/>
+    <div className="module-stats"><Stat label="Mensagens carregadas" value={loading?'…':String(snapshot.messages.length)}/><Stat label="Leads no CRM" value={String(snapshot.leads.length)}/><Stat label="Pipeline registrado" value={pipeline.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}/><Stat label="Tokens de IA" value={snapshot.usage.totalTokens.toLocaleString('pt-BR')}/></div>
+    <div className="charts"><div><h3>Mensagens nos últimos 7 dias</h3><div className="bars">{daily.map((count,index)=><i key={days[index].toISOString()} title={`${count} mensagens`} style={{height:`${Math.max(3,(count/max)*100)}%`}}/> )}</div><small>{days.map(day=>day.toLocaleDateString('pt-BR',{weekday:'short'}).replace('.','').toUpperCase()).join('   ')}</small></div><div><h3>Leads por etapa</h3>{stageRows.map(row=><p key={row.stage}><span>{initialStages.find(stage=>stage.id===row.stage)?.label??row.stage}</span><b>{row.count}</b></p>)}</div></div>
+  </div>
+}
+
+type TeamMember={id:string;name:string;email:string;role:string;createdAt:string}
+function RealTeam({notify}:{notify:(message:string)=>void}){
+  const [members,setMembers]=useState<TeamMember[]>([])
+  const [open,setOpen]=useState(false)
+  const [saving,setSaving]=useState(false)
+  const [form,setForm]=useState({name:'',email:'',role:'Atendente'})
+  async function load(){const response=await fetch('/api/team',{cache:'no-store'});const data=await response.json();setMembers(data.members??[])}
+  useEffect(()=>{load().catch(()=>notify('Não foi possível carregar a equipe'))},[])
+  async function save(event:React.FormEvent){
+    event.preventDefault();setSaving(true)
+    try{const response=await fetch('/api/team',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(form)});const data=await response.json();if(!response.ok)throw new Error(data.message);await load();setOpen(false);setForm({name:'',email:'',role:'Atendente'});notify('Pessoa cadastrada na equipe')}
+    catch(error){notify(error instanceof Error?error.message:'Falha ao cadastrar')}finally{setSaving(false)}
+  }
+  async function remove(member:TeamMember){
+    if(!window.confirm(`Remover ${member.name} da equipe?`))return
+    const response=await fetch(`/api/team?id=${encodeURIComponent(member.id)}`,{method:'DELETE'});if(response.ok){await load();notify('Pessoa removida')}else notify('Não foi possível remover')
+  }
+  return <div className="module">
+    <ModuleHeader onAction={()=>setOpen(true)} title="Equipe" subtitle="PESSOAS CADASTRADAS" action="Cadastrar pessoa"/>
+    <div className="module-stats"><Stat label="Pessoas cadastradas" value={String(members.length)}/><Stat label="Administradores" value={String(members.filter(member=>member.role==='Administrador').length)}/><Stat label="Supervisores" value={String(members.filter(member=>member.role==='Supervisor').length)}/></div>
+    {members.length?<div className="team-list">{members.map(member=><article key={member.id}><span className="big-avatar">{member.name.slice(0,2).toUpperCase()}</span><div><b>{member.name}</b><small>{member.email}</small></div><em>{member.role}</em><small>Cadastrado em {new Date(member.createdAt).toLocaleDateString('pt-BR')}</small><button title="Remover" onClick={()=>remove(member)}><Trash2 size={15}/></button></article>)}</div>:<EmptyState title="Nenhuma pessoa cadastrada" text="Cadastre os usuários reais que farão parte da operação."/>}
+    {open&&<div className="modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget)setOpen(false)}}><form className="modal" onSubmit={save}><header><div><small>EQUIPE</small><h2>Cadastrar pessoa</h2></div><button type="button" onClick={()=>setOpen(false)}>×</button></header><label>Nome completo<input required value={form.name} onChange={event=>setForm({...form,name:event.target.value})}/></label><label>E-mail<input required type="email" value={form.email} onChange={event=>setForm({...form,email:event.target.value})}/></label><label>Função<select value={form.role} onChange={event=>setForm({...form,role:event.target.value})}><option>Atendente</option><option>Supervisor</option><option>Administrador</option></select></label><p className="modal-note">O cadastro fica salvo neste ambiente. O envio de convite por e-mail ainda não está habilitado.</p><footer><button type="button" onClick={()=>setOpen(false)}>Cancelar</button><button className="primary" disabled={saving}>{saving?'Salvando…':'Salvar pessoa'}</button></footer></form></div>}
+  </div>
+}
+
+function EmptyState({title,text}:{title:string;text:string}){return <div className="empty-state"><Activity size={28}/><b>{title}</b><p>{text}</p></div>}
 
 type LeadClassification = 'Novo lead' | 'Em qualificação' | 'Qualificado' | 'Proposta' | 'Cliente' | 'Perdido'
 type RealContact = { number: string; remoteJid: string; name: string; source: string; classification: LeadClassification }
@@ -292,19 +393,22 @@ function RealContacts({ notify, onNavigate }: { notify: (message: string) => voi
 }
 
 type MenuOption = { id: string; label: string }
-type FlowAutomationNode = { id: string; type: 'trigger' | 'condition' | 'message' | 'wait' | 'classify' | 'menu' | 'webhook' | 'ticket' | 'handoff' | 'ai'; label: string; value: string; x: number; y: number; options?: MenuOption[]; operator?: 'contains' | 'equals' | 'startsWith' | 'exists'; triggerConfig?:{mode:'any'|'keyword';keyword:string}; aiConfig?: { objective:string; instructions:string; maxTurns:number; model:string; provider:'gemini'|'openai'; credentialId?:string } }
+type AIProvider='gemini'|'openai'|'custom'
+type FlowAutomationNode = { id: string; type: 'trigger' | 'condition' | 'message' | 'wait' | 'classify' | 'menu' | 'webhook' | 'ticket' | 'handoff' | 'ai'; label: string; value: string; x: number; y: number; options?: MenuOption[]; operator?: 'contains' | 'equals' | 'startsWith' | 'exists'; triggerConfig?:{mode:'any'|'keyword';keyword:string}; aiConfig?: { objective:string; instructions:string; maxTurns:number; model:string; provider:AIProvider; credentialId?:string } }
 type FlowEdge = { id: string; from: string; to: string; branch: string }
 
 type AIOffer={id:string;name:string;description:string;price:string;billing:string;conditions:string}
 type AIQualificationQuestion={id:string;field:string;question:string;required:boolean}
 type AIProfile = { companyName:string; agentName:string; role:string; tone:string; companyContext:string; offers:AIOffer[]; salesRules:string; qualificationFields:string[]; qualificationQuestions:AIQualificationQuestion[]; forbiddenTopics:string; handoffRules:string }
-type AICredential={id:string;name:string;provider:'gemini'|'openai';maskedKey:string;keySuffix:string;createdAt:string;updatedAt:string}
+type AICredential={id:string;name:string;provider:AIProvider;maskedKey:string;keySuffix:string;baseUrl?:string;model?:string;createdAt:string;updatedAt:string}
 
 function ApiVault({notify}:{notify:(message:string)=>void}){
   const [credentials,setCredentials]=useState<AICredential[]>([])
   const [name,setName]=useState('')
-  const [provider,setProvider]=useState<'gemini'|'openai'>('gemini')
+  const [provider,setProvider]=useState<AIProvider>('gemini')
   const [apiKey,setApiKey]=useState('')
+  const [baseUrl,setBaseUrl]=useState('')
+  const [model,setModel]=useState('')
   const [saving,setSaving]=useState(false)
   const [testing,setTesting]=useState('')
   async function load(){
@@ -316,9 +420,9 @@ function ApiVault({notify}:{notify:(message:string)=>void}){
     if(!name.trim()||!apiKey.trim())return notify('Preencha o nome e a chave da API')
     setSaving(true)
     try{
-      const response=await fetch('/api/ai/credentials',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,provider,apiKey})})
+      const response=await fetch('/api/ai/credentials',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,provider,apiKey,baseUrl,model})})
       const data=await response.json();if(!response.ok)throw new Error(data.message)
-      setCredentials(current=>[...current,data]);setName('');setApiKey('');notify('API salva e protegida')
+      setCredentials(current=>[...current,data]);setName('');setApiKey('');setBaseUrl('');setModel('');notify('API salva e protegida')
     }catch(error){notify(error instanceof Error?error.message:'Falha ao salvar API')}finally{setSaving(false)}
   }
   async function test(id:string){
@@ -333,8 +437,8 @@ function ApiVault({notify}:{notify:(message:string)=>void}){
     setCredentials(current=>current.filter(item=>item.id!==id));notify('API removida')
   }
   return <div className="module api-vault"><header><div><span className="eyebrow">COFRE DE INTEGRAÇÕES · CRIPTOGRAFADO</span><h1>APIs e credenciais</h1><p>Cadastre várias chaves e escolha qual delas cada automação deve usar.</p></div><div className="vault-security"><ShieldCheck/><span><b>Proteção local ativa</b><small>As chaves nunca voltam para a tela</small></span></div></header>
-    <div className="vault-layout"><section className="credential-form"><div className="vault-step"><span>01</span><div><b>Nova credencial</b><p>Dê um nome fácil de reconhecer no construtor.</p></div></div><label>Nome da API<input value={name} onChange={event=>setName(event.target.value)} placeholder="Ex.: Gemini comercial"/></label><label>Provedor<select value={provider} onChange={event=>setProvider(event.target.value as 'gemini'|'openai')}><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label><label>Chave secreta<input type="password" autoComplete="off" value={apiKey} onChange={event=>setApiKey(event.target.value)} placeholder={provider==='gemini'?'Cole a chave do Google AI Studio':'Cole a chave sk-proj…'}/><small>A chave será criptografada antes de ser gravada.</small></label><button disabled={saving||!name.trim()||!apiKey.trim()} onClick={add}><Plus/>{saving?'Protegendo…':'Salvar credencial'}</button></section>
-      <section className="credential-list"><header><div><b>Credenciais disponíveis</b><small>{credentials.length} cadastrada(s)</small></div><span>SELECIONÁVEIS NAS AUTOMAÇÕES</span></header>{credentials.length===0?<div className="vault-empty"><Plug/><b>Nenhuma API cadastrada</b><p>Adicione a primeira credencial ao lado.</p></div>:<div>{credentials.map(item=><article key={item.id}><span className={`provider-mark ${item.provider}`}>{item.provider==='gemini'?'G':'O'}</span><div><small>{item.provider==='gemini'?'GOOGLE GEMINI':'OPENAI'}</small><b>{item.name}</b><code>{item.maskedKey}</code></div><em>CRIPTOGRAFADA</em><button disabled={testing===item.id} onClick={()=>test(item.id)}>{testing===item.id?'Testando…':'Testar conexão'}</button><button className="credential-delete" onClick={()=>remove(item.id)} title="Excluir"><Trash2/></button></article>)}</div>}</section>
+    <div className="vault-layout"><section className="credential-form"><div className="vault-step"><span>01</span><div><b>Nova credencial</b><p>Dê um nome fácil de reconhecer no construtor.</p></div></div><label>Nome da API<input value={name} onChange={event=>setName(event.target.value)} placeholder="Ex.: OpenCode comercial"/></label><label>Tipo de provedor<select value={provider} onChange={event=>setProvider(event.target.value as AIProvider)}><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="custom">Outra API · OpenCode ou compatível</option></select><small>Use “Outra API” para serviços compatíveis com o formato OpenAI.</small></label>{provider==='custom'&&<><label>Endereço da API<input value={baseUrl} onChange={event=>setBaseUrl(event.target.value)} placeholder="https://api.seuprovedor.com/v1"/></label><label>Modelo padrão<input value={model} onChange={event=>setModel(event.target.value)} placeholder="Ex.: deepseek-v4-flash"/></label></>}<label>Chave secreta<input type="password" autoComplete="off" value={apiKey} onChange={event=>setApiKey(event.target.value)} placeholder={provider==='gemini'?'Cole a chave do Google AI Studio':provider==='openai'?'Cole a chave sk-proj…':'Cole a chave fornecida pelo serviço'}/><small>A chave será criptografada antes de ser gravada.</small></label><button disabled={saving||!name.trim()||!apiKey.trim()||(provider==='custom'&&(!baseUrl.trim()||!model.trim()))} onClick={add}><Plus/>{saving?'Protegendo…':'Salvar credencial'}</button></section>
+      <section className="credential-list"><header><div><b>Credenciais disponíveis</b><small>{credentials.length} cadastrada(s)</small></div><span>SELECIONÁVEIS NAS AUTOMAÇÕES</span></header>{credentials.length===0?<div className="vault-empty"><Plug/><b>Nenhuma API cadastrada</b><p>Adicione a primeira credencial ao lado.</p></div>:<div>{credentials.map(item=><article key={item.id}><span className={`provider-mark ${item.provider}`}>{item.provider==='gemini'?'G':item.provider==='openai'?'O':'+'}</span><div><small>{item.provider==='gemini'?'GOOGLE GEMINI':item.provider==='openai'?'OPENAI':'API PERSONALIZADA'}</small><b>{item.name}</b><code>{item.maskedKey}{item.model?` · ${item.model}`:''}</code></div><em>CRIPTOGRAFADA</em><button disabled={testing===item.id} onClick={()=>test(item.id)}>{testing===item.id?'Testando…':'Testar conexão'}</button><button className="credential-delete" onClick={()=>remove(item.id)} title="Excluir"><Trash2/></button></article>)}</div>}</section>
     </div><div className="vault-help"><BrainCircuit/><div><b>Como usar</b><p>Abra Automações, clique em um bloco “Agente de IA” e selecione esta credencial no campo “API utilizada”. Cada bloco pode usar uma chave diferente.</p></div></div>
   </div>
 }
@@ -411,7 +515,7 @@ function RealAutomations({ notify }: { notify: (message: string) => void }) {
   const [creatorValue, setCreatorValue] = useState('')
   const [creatorOptions, setCreatorOptions] = useState<MenuOption[]>([])
   const [creatorOperator, setCreatorOperator] = useState<FlowAutomationNode['operator']>('contains')
-  const [creatorAi, setCreatorAi] = useState<NonNullable<FlowAutomationNode['aiConfig']>>({ objective:'Qualificar o interesse do lead e coletar nome, necessidade e prazo.', instructions:'Seja cordial, direto e faça uma pergunta por vez.', maxTurns:8, model:'gemini-2.5-flash', provider:'gemini' })
+  const [creatorAi, setCreatorAi] = useState<NonNullable<FlowAutomationNode['aiConfig']>>({ objective:'Qualificar o interesse do lead e coletar nome, necessidade e prazo.', instructions:'Seja cordial, direto e faça uma pergunta por vez.', maxTurns:40, model:'gemini-2.5-flash', provider:'gemini' })
   const [credentials,setCredentials]=useState<AICredential[]>([])
   const canvasRef = useRef<HTMLDivElement>(null)
   const draggedNodeRef=useRef(false)
@@ -586,12 +690,12 @@ function RealAutomations({ notify }: { notify: (message: string) => void }) {
         {selectedNode.type === 'ticket' && <label>Assunto do ticket<input value={selectedNode.value} onChange={event => updateNode({ value: event.target.value })}/></label>}
         {selectedNode.type === 'handoff' && <label>Motivo da entrega<input value={selectedNode.value} onChange={event => updateNode({ value: event.target.value })}/><small>Ao chegar aqui, a automação para de responder este contato até você reativá-la.</small></label>}
         {selectedNode.type === 'ai' && <div className="inspector-menu">
-          <label>API utilizada<select value={selectedNode.aiConfig?.credentialId??''} onChange={event=>{const credential=credentials.find(item=>item.id===event.target.value);const base=selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,model:'gemini-2.5-flash',provider:'gemini'};updateNode({aiConfig:{...base,credentialId:event.target.value||undefined,provider:credential?.provider??base.provider,model:credential?.provider==='openai'?'gpt-5.6':credential?.provider==='gemini'?'gemini-2.5-flash':base.model}})}}><option value="">Credencial padrão do ambiente</option>{credentials.map(item=><option value={item.id} key={item.id}>{item.name} · {item.provider==='gemini'?'Gemini':'OpenAI'} · {item.maskedKey}</option>)}</select><small>Cadastre novas chaves em Configurações → APIs e credenciais.</small></label>
-          <label>Provedor da IA<select disabled={Boolean(selectedNode.aiConfig?.credentialId)} value={selectedNode.aiConfig?.provider ?? (selectedNode.aiConfig?.model?.startsWith('gemini-')?'gemini':'openai')} onChange={event=>{const provider=event.target.value as 'gemini'|'openai';updateNode({aiConfig:{...(selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,model:'gemini-2.5-flash',provider:'gemini'}),provider,model:provider==='gemini'?'gemini-2.5-flash':'gpt-5.6'}})}}><option value="gemini">Gemini · gratuito para testes</option><option value="openai">OpenAI · exige saldo na API</option></select></label>
-          <label>Modelo<select value={selectedNode.aiConfig?.model ?? 'gemini-2.5-flash'} onChange={event=>updateNode({aiConfig:{...(selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,provider:'gemini'}),model:event.target.value}})}>{(selectedNode.aiConfig?.provider??'gemini')==='gemini'?<><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option></>:<option value="gpt-5.6">GPT-5.6</option>}</select></label>
+          <label>API utilizada<select value={selectedNode.aiConfig?.credentialId??''} onChange={event=>{const credential=credentials.find(item=>item.id===event.target.value);const base=selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,model:'gemini-2.5-flash',provider:'gemini'};updateNode({aiConfig:{...base,credentialId:event.target.value||undefined,provider:credential?.provider??base.provider,model:credential?.model??(credential?.provider==='openai'?'gpt-5.6':credential?.provider==='gemini'?'gemini-2.5-flash':base.model)}})}}><option value="">Credencial padrão do ambiente</option>{credentials.map(item=><option value={item.id} key={item.id}>{item.name} · {item.provider==='gemini'?'Gemini':item.provider==='openai'?'OpenAI':'Personalizada'} · {item.maskedKey}</option>)}</select><small>Cadastre Gemini, OpenAI, OpenCode ou outra API compatível em Configurações.</small></label>
+          <label>Provedor da IA<select disabled={Boolean(selectedNode.aiConfig?.credentialId)} value={selectedNode.aiConfig?.provider ?? (selectedNode.aiConfig?.model?.startsWith('gemini-')?'gemini':'openai')} onChange={event=>{const provider=event.target.value as AIProvider;updateNode({aiConfig:{...(selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,model:'gemini-2.5-flash',provider:'gemini'}),provider,model:provider==='gemini'?'gemini-2.5-flash':'gpt-5.6'}})}}><option value="gemini">Gemini · gratuito para testes</option><option value="openai">OpenAI · exige saldo na API</option><option value="custom">API personalizada</option></select></label>
+          <label>Modelo{selectedNode.aiConfig?.provider==='custom'?<input value={selectedNode.aiConfig?.model??''} onChange={event=>updateNode({aiConfig:{...(selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,provider:'custom'}),model:event.target.value}})} placeholder="Modelo configurado na credencial"/>:<select value={selectedNode.aiConfig?.model ?? 'gemini-2.5-flash'} onChange={event=>updateNode({aiConfig:{...(selectedNode.aiConfig??{objective:'',instructions:'',maxTurns:8,provider:'gemini'}),model:event.target.value}})}>{(selectedNode.aiConfig?.provider??'gemini')==='gemini'?<><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite</option></>:<option value="gpt-5.6">GPT-5.6</option>}</select>}</label>
           <label>Objetivo<textarea rows={3} value={selectedNode.aiConfig?.objective ?? ''} onChange={event => updateNode({aiConfig:{...(selectedNode.aiConfig ?? {instructions:'',maxTurns:8,model:'gemini-2.5-flash',provider:'gemini'}),objective:event.target.value}})}/></label>
           <label>Instruções<textarea rows={3} value={selectedNode.aiConfig?.instructions ?? ''} onChange={event => updateNode({aiConfig:{...(selectedNode.aiConfig ?? {objective:'',maxTurns:8,model:'gemini-2.5-flash',provider:'gemini'}),instructions:event.target.value}})}/></label>
-          <label>Limite de respostas<input type="number" min="1" max="30" value={selectedNode.aiConfig?.maxTurns ?? 8} onChange={event => updateNode({aiConfig:{...(selectedNode.aiConfig ?? {objective:'',instructions:'',model:'gemini-2.5-flash',provider:'gemini'}),maxTurns:Number(event.target.value)}})}/></label>
+          <label>Limite de interações<input type="number" min="1" max="100" value={Math.max(selectedNode.aiConfig?.maxTurns ?? 40,40)} onChange={event => updateNode({aiConfig:{...(selectedNode.aiConfig ?? {objective:'',instructions:'',model:'gemini-2.5-flash',provider:'gemini'}),maxTurns:Number(event.target.value)}})}/><small>Defina quantas mensagens a IA pode trocar. O sistema preserva as perguntas obrigatórias e só entrega antes em caso de pedido humano ou após 100 interações sem conclusão.</small></label>
           <div className="branch-config"><label>Objetivo concluído<select value={edges.find(edge=>edge.from===selectedNode.id&&edge.branch==='qualified')?.to??''} onChange={event=>setBranchTarget('qualified',event.target.value)}><option value="">Encerrar fluxo</option>{nodes.filter(node=>node.id!==selectedNode.id).map(node=><option value={node.id} key={node.id}>{node.label}</option>)}</select></label><label>Entregar para humano<select value={edges.find(edge=>edge.from===selectedNode.id&&edge.branch==='handoff')?.to??''} onChange={event=>setBranchTarget('handoff',event.target.value)}><option value="">Pausar automaticamente</option>{nodes.filter(node=>node.id!==selectedNode.id).map(node=><option value={node.id} key={node.id}>{node.label}</option>)}</select></label></div>
         </div>}
         {selectedNode.type === 'trigger' && <div className="trigger-settings">
@@ -639,7 +743,7 @@ function RealAutomations({ notify }: { notify: (message: string) => void }) {
               {creatorType === 'ticket' && <label>Assunto do ticket<input value={creatorValue} onChange={event => setCreatorValue(event.target.value)}/></label>}
               {creatorType === 'handoff' && <label>Motivo da entrega<input value={creatorValue} onChange={event => setCreatorValue(event.target.value)}/><small>A automação será pausada e sua equipe continuará o atendimento.</small></label>}
               {creatorType === 'webhook' && <label>Endereço do webhook<input type="url" value={creatorValue} onChange={event => setCreatorValue(event.target.value)}/></label>}
-              {creatorType === 'ai' && <div className="ai-block-config"><label>API utilizada<select value={creatorAi.credentialId??''} onChange={event=>{const credential=credentials.find(item=>item.id===event.target.value);setCreatorAi({...creatorAi,credentialId:event.target.value||undefined,provider:credential?.provider??creatorAi.provider,model:credential?.provider==='openai'?'gpt-5.6':credential?.provider==='gemini'?'gemini-2.5-flash':creatorAi.model})}}><option value="">Credencial padrão do ambiente</option>{credentials.map(item=><option value={item.id} key={item.id}>{item.name} · {item.provider==='gemini'?'Gemini':'OpenAI'}</option>)}</select></label><label>Provedor<select disabled={Boolean(creatorAi.credentialId)} value={creatorAi.provider} onChange={event=>{const provider=event.target.value as 'gemini'|'openai';setCreatorAi({...creatorAi,provider,model:provider==='gemini'?'gemini-2.5-flash':'gpt-5.6'})}}><option value="gemini">Gemini · gratuito para testes</option><option value="openai">OpenAI · exige saldo na API</option></select></label><label>Objetivo do agente<textarea rows={3} value={creatorAi.objective} onChange={event => setCreatorAi({...creatorAi,objective:event.target.value})}/></label><label>Como ele deve conversar<textarea rows={4} value={creatorAi.instructions} onChange={event => setCreatorAi({...creatorAi,instructions:event.target.value})}/></label><label>Máximo de respostas antes de entregar ao humano<input type="number" min="1" max="30" value={creatorAi.maxTurns} onChange={event => setCreatorAi({...creatorAi,maxTurns:Number(event.target.value)})}/></label><div className="ai-exits"><span><i/> Continuar conversando</span><span><i/> Objetivo concluído</span><span><i/> Entregar ao humano</span></div></div>}
+              {creatorType === 'ai' && <div className="ai-block-config"><label>API utilizada<select value={creatorAi.credentialId??''} onChange={event=>{const credential=credentials.find(item=>item.id===event.target.value);setCreatorAi({...creatorAi,credentialId:event.target.value||undefined,provider:credential?.provider??creatorAi.provider,model:credential?.model??(credential?.provider==='openai'?'gpt-5.6':credential?.provider==='gemini'?'gemini-2.5-flash':creatorAi.model)})}}><option value="">Credencial padrão do ambiente</option>{credentials.map(item=><option value={item.id} key={item.id}>{item.name} · {item.provider==='gemini'?'Gemini':item.provider==='openai'?'OpenAI':'Personalizada'}</option>)}</select></label><label>Provedor<select disabled={Boolean(creatorAi.credentialId)} value={creatorAi.provider} onChange={event=>{const provider=event.target.value as AIProvider;setCreatorAi({...creatorAi,provider,model:provider==='gemini'?'gemini-2.5-flash':'gpt-5.6'})}}><option value="gemini">Gemini · gratuito para testes</option><option value="openai">OpenAI · exige saldo na API</option><option value="custom">API personalizada</option></select></label>{creatorAi.provider==='custom'&&<label>Modelo<input value={creatorAi.model} onChange={event=>setCreatorAi({...creatorAi,model:event.target.value})}/></label>}<label>Objetivo do agente<textarea rows={3} value={creatorAi.objective} onChange={event => setCreatorAi({...creatorAi,objective:event.target.value})}/></label><label>Como ele deve conversar<textarea rows={4} value={creatorAi.instructions} onChange={event => setCreatorAi({...creatorAi,instructions:event.target.value})}/></label><label>Limite de interações<input type="number" min="1" max="100" value={creatorAi.maxTurns} onChange={event => setCreatorAi({...creatorAi,maxTurns:Number(event.target.value)})}/><small>40 é o padrão recomendado. As perguntas obrigatórias continuam protegidas até serem respondidas ou recusadas.</small></label><div className="ai-exits"><span><i/> Continuar conversando</span><span><i/> Objetivo concluído</span><span><i/> Entregar ao humano</span></div></div>}
             </>}
           </div>
         </div>
@@ -971,12 +1075,12 @@ function RealInbox({ notify }: { notify: (message: string) => void }) {
         {loading && <p className="empty-chat">Carregando mensagens...</p>}
         {!loading && chats.length === 0 && <p className="empty-chat">Nenhuma mensagem nova. Envie uma mensagem para o número conectado.</p>}
         {chats.map(chat => <button onContextMenu={event => { event.preventDefault(); setThreadContext({ x:event.clientX, y:event.clientY, number:chat.number, name:chat.name }) }} onClick={() => setSelected(chat.remoteJid)} className={chat.remoteJid === current?.remoteJid ? 'selected' : ''} key={chat.remoteJid}>
-          <span className="avatar">{chat.name.slice(0,2).toUpperCase()}</span><div><b>{chat.name}</b><p>{chat.last.text}</p></div><small>{new Date(chat.last.timestamp * 1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}{!chat.last.fromMe && <em className="unread-count">1</em>}</small>
+          <span className="avatar">{chat.name.slice(0,2).toUpperCase()}</span><div><b>{chat.name}</b><p>{chat.last.text}</p></div><small>{new Date(chat.last.timestamp * 1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</small>
         </button>)}
       </aside>
       <section className={`chat ${dragActive?'drop-active':''}`} onDragEnter={handleFileDragEnter} onDragOver={handleFileDragOver} onDragLeave={handleFileDragLeave} onDrop={handleFileDrop}>
         {dragActive&&<div className="chat-drop-zone"><UploadCloud/><b>Solte para anexar</b><span>As imagens serão abertas para você conferir antes do envio</span></div>}
-        {current ? <><header><span className="avatar">{current.name.slice(0,2).toUpperCase()}</span><div><b>{current.name}</b><small><i/> WhatsApp real · +{current.number}</small></div><button><Phone size={17}/></button><button><MoreHorizontal size={17}/></button></header>
+        {current ? <><header><span className="avatar">{current.name.slice(0,2).toUpperCase()}</span><div><b>{current.name}</b><small><i/> WhatsApp real · +{current.number}</small></div><button title="Ligar para o contato" onClick={()=>window.location.href=`tel:+${current.number}`}><Phone size={17}/></button><button title="Copiar número" onClick={()=>navigator.clipboard.writeText(`+${current.number}`).then(()=>notify('Número copiado'))}><MoreHorizontal size={17}/></button></header>
           <div className="messages"><span className="date">MENSAGENS REAIS</span>{groupMessages(currentMessages).map(group => <div key={group[0].id} className={`bubble ${group[0].fromMe ? 'outgoing' : 'incoming'} ${group.length>1?'media-album':''}`}>{group.length>1 ? <div className="album-grid">{group.map(message=><MediaMessage message={message} key={message.id}/>)}</div> : group[0].hasMedia ? <MediaMessage message={group[0]}/> : <LinkifiedText text={group[0].text}/>}<small>{new Date(group.at(-1)!.timestamp * 1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}{group[0].fromMe ? ` · ${group.at(-1)!.status === 'READ' ? '✓✓' : '✓'}` : ''}</small></div>)}</div>
           {mediaDraft.length>0&&<div className="attachment-draft"><header><div><b>{mediaDraft.length===1?'Preparar anexo':`Preparar ${mediaDraft.length} anexos`}</b><small>Confira antes de enviar pelo WhatsApp</small></div><button disabled={sending} onClick={cancelMediaDraft}><X/></button></header><div className="attachment-strip">{mediaDraft.map((item,index)=><article key={`${item.file.name}-${index}`}>{item.kind==='image'?<img src={item.url} alt={item.file.name}/>:item.kind==='video'?<video src={item.url}/>:item.kind==='audio'?<audio controls src={item.url}/>:<span><FileText/><b>{item.file.name}</b></span>}<button disabled={sending} onClick={()=>removeMediaDraft(index)} title="Remover"><X/></button><small>{item.file.name}</small></article>)}</div><footer><input disabled={sending} value={mediaCaption} onChange={event=>setMediaCaption(event.target.value)} placeholder="Adicionar legenda à primeira mídia…"/><span>{mediaProgress}</span><button disabled={sending||!mediaDraft.length} onClick={sendMediaDraft}><Send/> Enviar</button></footer></div>}
           {recording?<footer className="voice-composer recording-active"><button className="voice-cancel" onClick={cancelRecording} title="Cancelar gravação"><Trash2/></button><div className="live-recording"><i/><b>{recordingClock}</b><div className="voice-wave">{Array.from({length:26},(_,index)=><span style={{animationDelay:`${(index%7)*.08}s`}} key={index}/>)}</div><small>Gravando</small></div><button className="voice-stop" onClick={stopRecording} title="Parar e revisar"><Square/></button></footer>:audioDraft?<footer className="voice-composer voice-preview"><button className="voice-cancel" disabled={sending} onClick={cancelAudioDraft} title="Descartar áudio"><Trash2/></button><div><span><Mic/></span><audio controls preload="metadata" src={audioDraft.url}/></div><small>Ouça antes de enviar</small><button className="voice-send" disabled={sending} onClick={sendRecordedAudio} title="Enviar áudio"><Send/></button></footer>:<footer className="message-composer"><button disabled={sending||mediaDraft.length>0} onClick={selectMedia} title="Enviar imagem, vídeo ou documento"><Paperclip size={18}/></button><button disabled={sending||mediaDraft.length>0} onClick={selectSticker} title="Enviar figurinha"><Smile size={18}/></button><input value={draft} disabled={sending||mediaDraft.length>0} onChange={event=>setDraft(event.target.value)} onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey)send()}} placeholder={sending?'Enviando…':'Digite uma mensagem'}/>{draft.trim()?<button disabled={sending||mediaDraft.length>0} onClick={send} className="send" title="Enviar mensagem"><Send size={17}/></button>:<button className="microphone" disabled={sending||mediaDraft.length>0} onClick={startRecording} title="Gravar mensagem de voz"><Mic size={18}/></button>}</footer>}</> :
@@ -1140,7 +1244,7 @@ function WhatsAppChannels({ notify }: { notify: (message: string) => void }) {
           </div>
         </div>
       </article>
-      <aside className="channel-info"><h3>Recursos deste canal</h3><p><CheckCircle2/> Envio e recebimento de mensagens</p><p><CheckCircle2/> Imagens, áudios e documentos</p><p><CheckCircle2/> Múltiplos atendentes no CRM</p><p><CheckCircle2/> Automações e agente de IA</p><hr/><button className="sync-contacts-button" disabled={syncingContacts} onClick={syncContacts}>{syncingContacts ? 'Preparando...' : 'Sincronizar contatos salvos'}</button><small>Importa os contatos do WhatsApp sem exigir que você abra uma conversa com cada pessoa.</small><hr/><div className="instagram-connect"><span>◎</span><div><b>Instagram Direct</b><small>API oficial · aguardando App Meta</small></div></div><button className="instagram-button" onClick={()=>window.open('https://developers.facebook.com/apps/','_blank')}>Preparar conexão oficial</button><small>Para receber DMs, a próxima etapa é cadastrar o App ID, segredo e conta profissional da Meta.</small></aside>
+      <aside className="channel-info"><h3>Recursos ativos deste canal</h3><p><CheckCircle2/> Envio e recebimento de mensagens</p><p><CheckCircle2/> Imagens, áudios e documentos</p><p><CheckCircle2/> Sincronização de contatos disponíveis</p><p><CheckCircle2/> Automações e agente de IA</p><hr/><button className="sync-contacts-button" disabled={syncingContacts} onClick={syncContacts}>{syncingContacts ? 'Preparando...' : 'Sincronizar contatos salvos'}</button><small>Importa os contatos que o WhatsApp disponibilizar para a sessão conectada.</small></aside>
     </section>
     {syncQr && <div className="sync-modal"><div><button className="sync-close" onClick={() => setSyncQr('')}>×</button><span className="eyebrow">SINCRONIZAÇÃO DA AGENDA</span><h2>Leia este QR uma única vez</h2><p>Esta sessão serve para o WhatsApp entregar os contatos já salvos. Mensagens antigas continuam fora da Inbox.</p><img src={syncQr} alt="QR Code para sincronizar contatos"/><small>Depois de conectar, os contatos aparecerão automaticamente em Contatos.</small></div></div>}
   </div>
@@ -1149,12 +1253,12 @@ function WhatsAppChannels({ notify }: { notify: (message: string) => void }) {
 function ModuleHeader({title,subtitle,action,onAction}:{title:string;subtitle:string;action:string;onAction:()=>void}) {
   return <header><div><span className="eyebrow">{subtitle}</span><h1>{title}</h1></div><div className="header-actions"><button onClick={onAction} className="primary"><Plus size={17}/>{action}</button></div></header>
 }
-function Stat({label,value}:{label:string;value:string}) { return <div><small>{label}</small><strong>{value}</strong><span className="up">↑ este mês</span></div> }
+function Stat({label,value}:{label:string;value:string}) { return <div><small>{label}</small><strong>{value}</strong></div> }
 function FlowNode({icon,kind,title,detail}:{icon:React.ReactNode;kind:string;title:string;detail:string}) { return <div className="flow-node"><span>{icon}</span><small>{kind}</small><b>{title}</b><p>{detail}</p></div> }
-function ResourceTable({rows}:{rows:string[][]}) { return <div className="resource-table">{rows.map((row,i)=><div key={i}>{row.map((cell,j)=>j===0?<b key={j}>{cell}</b>:<span key={j}>{cell}</span>)}<button><MoreHorizontal size={17}/></button></div>)}</div> }
+function ResourceTable({rows}:{rows:string[][]}) { return <div className="resource-table">{rows.map((row,i)=><div key={i}>{row.map((cell,j)=>j===0?<b key={j}>{cell}</b>:<span key={j}>{cell}</span>)}</div>)}</div> }
 
-function ActionModal({kind,stages,onClose,onDeal,onDone}:{kind:string;stages:Stage[];onClose:()=>void;onDeal:(data:Record<string,string>)=>void;onDone:(m:string)=>void}) {
-  const [form,setForm]=useState<Record<string,string>>({})
+function ActionModal({kind,stages,initialStage,onClose,onDeal,onDone}:{kind:string;stages:Stage[];initialStage?:string;onClose:()=>void;onDeal:(data:Record<string,string>)=>void;onDone:(m:string)=>void}) {
+  const [form,setForm]=useState<Record<string,string>>({stage:initialStage??stages[0].id})
   const field=(name:string,label:string,type='text')=><label>{label}<input required type={type} value={form[name]??''} onChange={e=>setForm({...form,[name]:e.target.value})}/></label>
   function submit(e:React.FormEvent){e.preventDefault();if(kind==='Negócios')return onDeal(form);onDone(`${kind.replace(/s$/,'')} salvo com sucesso`)}
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><form className="modal" onSubmit={submit}><header><div><small>NOVO REGISTRO</small><h2>{kind}</h2></div><button type="button" onClick={onClose}>×</button></header>

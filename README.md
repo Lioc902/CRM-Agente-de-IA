@@ -46,7 +46,7 @@ operações multi-tenant.
 
 ### Agentes de IA
 
-- Integração com Google Gemini e OpenAI.
+- Integração com Google Gemini, OpenAI e APIs personalizadas compatíveis.
 - Cadastro de identidade, função, tom de voz e contexto da empresa.
 - Planos e preços cadastrados separadamente.
 - Roteiro ordenado de perguntas para qualificação.
@@ -54,7 +54,9 @@ operações multi-tenant.
 - Respeito à recusa de dados, sem insistência.
 - Transferência imediata quando o contato solicita atendimento humano.
 - Registro de consumo de tokens.
-- Cofre local criptografado para múltiplas credenciais de IA.
+- Cofre local criptografado para múltiplas credenciais de IA, incluindo
+  endpoints e modelos personalizados usados por provedores compatíveis com o
+  ecossistema OpenCode.
 - Seleção de uma credencial diferente em cada bloco de automação.
 
 ### White-label e operação

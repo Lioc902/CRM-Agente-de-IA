@@ -12,7 +12,7 @@ export type AutomationNode = {
   options?: { id: string; label: string }[]
   operator?: 'contains' | 'equals' | 'startsWith' | 'exists'
   triggerConfig?: { mode: 'any' | 'keyword'; keyword: string }
-  aiConfig?: { objective: string; instructions: string; maxTurns: number; model: string; provider?: 'gemini' | 'openai'; credentialId?: string }
+  aiConfig?: { objective: string; instructions: string; maxTurns: number; model: string; provider?: 'gemini' | 'openai' | 'custom'; credentialId?: string }
   x?: number
   y?: number
 }
@@ -38,7 +38,7 @@ async function readConfig() {
     if (Array.isArray(saved.nodes)) return {
       ...defaults,
       ...saved,
-      nodes: saved.nodes.map((node: AutomationNode, index: number) => ({ ...node, x: node.x ?? 60 + index * 280, y: node.y ?? 150 })),
+      nodes: saved.nodes.map((node: AutomationNode, index: number) => ({ ...node, x: node.x ?? 60 + index * 280, y: node.y ?? 150, aiConfig: node.aiConfig ? { ...node.aiConfig, maxTurns: Math.min(Math.max(Number(node.aiConfig.maxTurns) || 40, 40), 100) } : undefined })),
       edges: Array.isArray(saved.edges) ? saved.edges : saved.nodes.slice(0, -1).map((node: AutomationNode, index: number) => ({ id: `edge-${index + 1}`, from: node.id, to: saved.nodes[index + 1].id, branch: node.type === 'condition' ? 'true' : 'default' })),
     }
     return {
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   const data = await request.json()
   const nodes = Array.isArray(data.nodes) ? data.nodes.filter((node: AutomationNode) =>
     node?.id && ['trigger', 'condition', 'message', 'wait', 'classify', 'menu', 'webhook', 'ticket', 'handoff', 'ai'].includes(node.type) && String(node.value ?? '').trim()
-  ).map((node: AutomationNode) => ({ id: String(node.id), type: node.type, label: String(node.label), value: String(node.value).trim(), x: Number(node.x) || 0, y: Number(node.y) || 0, operator: node.operator ?? 'contains', triggerConfig:node.type==='trigger'?{mode:node.triggerConfig?.mode==='keyword'?'keyword':'any',keyword:String(node.triggerConfig?.keyword??'').trim()}:undefined, options: Array.isArray(node.options) ? node.options.slice(0, 10).map(option => ({ id: String(option.id), label: String(option.label).trim() })).filter(option => option.label) : undefined, aiConfig: node.aiConfig ? { objective: String(node.aiConfig.objective ?? ''), instructions: String(node.aiConfig.instructions ?? ''), maxTurns: Math.min(Math.max(Number(node.aiConfig.maxTurns) || 8, 1), 30), model: String(node.aiConfig.model || 'gemini-2.5-flash'), provider: node.aiConfig.provider === 'openai' ? 'openai' : String(node.aiConfig.model).startsWith('gpt-') ? 'openai' : 'gemini', credentialId:String(node.aiConfig.credentialId??'').trim()||undefined } : undefined })) : []
+  ).map((node: AutomationNode) => ({ id: String(node.id), type: node.type, label: String(node.label), value: String(node.value).trim(), x: Number(node.x) || 0, y: Number(node.y) || 0, operator: node.operator ?? 'contains', triggerConfig:node.type==='trigger'?{mode:node.triggerConfig?.mode==='keyword'?'keyword':'any',keyword:String(node.triggerConfig?.keyword??'').trim()}:undefined, options: Array.isArray(node.options) ? node.options.slice(0, 10).map(option => ({ id: String(option.id), label: String(option.label).trim() })).filter(option => option.label) : undefined, aiConfig: node.aiConfig ? { objective: String(node.aiConfig.objective ?? ''), instructions: String(node.aiConfig.instructions ?? ''), maxTurns: Math.min(Math.max(Number(node.aiConfig.maxTurns) || 40, 1), 100), model: String(node.aiConfig.model || 'gemini-2.5-flash'), provider: node.aiConfig.provider === 'custom' ? 'custom' : node.aiConfig.provider === 'openai' ? 'openai' : String(node.aiConfig.model).startsWith('gpt-') ? 'openai' : 'gemini', credentialId:String(node.aiConfig.credentialId??'').trim()||undefined } : undefined })) : []
   const actionTypes=['message','menu','ai','classify','ticket','handoff','webhook']
   if (!nodes.some((node: AutomationNode) => node.type === 'trigger') || !nodes.some((node: AutomationNode) => actionTypes.includes(node.type))) {
     return NextResponse.json({ message: 'Adicione um gatilho e pelo menos uma ação, como mensagem, menu ou agente de IA.' }, { status: 400 })

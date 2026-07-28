@@ -8,6 +8,7 @@ const body = DM_Sans({ subsets: ['latin'], variable: '--font-body' })
 export const metadata: Metadata = {
   title: 'ASAX CRM',
   description: 'Central de vendas e atendimento omnichannel',
+  icons:{icon:'/asax-symbol.png',apple:'/asax-symbol.png'},
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

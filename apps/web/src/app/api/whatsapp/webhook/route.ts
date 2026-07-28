@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
 import { getCredentialSecret } from '../../../../lib/ai-credentials'
+import { repairTextEncoding } from '../../../../lib/text-encoding'
 
 const baseUrl = process.env.EVOLUTION_API_URL ?? 'http://127.0.0.1:8080'
 const apiKey = process.env.EVOLUTION_API_KEY
@@ -21,18 +22,10 @@ function messageText(message: Record<string, any> = {}) {
     message.buttonsResponseMessage?.selectedButtonId ?? message.listResponseMessage?.singleSelectReply?.selectedRowId ?? ''
 }
 async function resolveOpenAIKey(){
-  if(process.env.OPENAI_API_KEY)return process.env.OPENAI_API_KEY
-  for(const candidate of [path.join(process.cwd(),'.env.local'),path.join(process.cwd(),'.env'),path.resolve(process.cwd(),'../../.env.local'),path.resolve(process.cwd(),'../../.env')]){
-    try{const content=await fs.readFile(candidate,'utf8');const match=content.match(/^OPENAI_API_KEY\s*=\s*["']?([^"'\r\n]+)["']?/m);if(match?.[1])return match[1].trim()}catch{}
-  }
-  return ''
+  return process.env.OPENAI_API_KEY ?? ''
 }
 async function resolveGeminiKey(){
-  if(process.env.GEMINI_API_KEY)return process.env.GEMINI_API_KEY
-  for(const candidate of [path.join(process.cwd(),'.env.local'),path.join(process.cwd(),'.env'),path.resolve(process.cwd(),'../../.env.local'),path.resolve(process.cwd(),'../../.env')]){
-    try{const content=await fs.readFile(candidate,'utf8');const match=content.match(/^GEMINI_API_KEY\s*=\s*["']?([^"'\r\n]+)["']?/m);if(match?.[1])return match[1].trim()}catch{}
-  }
-  return ''
+  return process.env.GEMINI_API_KEY ?? ''
 }
 
 const qualificationSchema = {
@@ -107,6 +100,7 @@ function refusedToProvideData(input:string){
 }
 
 export async function POST(request: NextRequest) {
+  if (!secret && process.env.NODE_ENV === 'production') return NextResponse.json({ message: 'Webhook não configurado.' }, { status: 503 })
   if (secret && request.headers.get('x-nexo-secret') !== secret) {
     return NextResponse.json({ message: 'Assinatura inválida' }, { status: 401 })
   }
@@ -258,7 +252,7 @@ export async function POST(request: NextRequest) {
           await fs.writeFile(statePath,JSON.stringify(automationState,null,2),'utf8')
           break
         }
-        const config = node.aiConfig ?? { objective: node.value, instructions: '', maxTurns: 8, model: 'gemini-2.5-flash', provider: 'gemini' }
+        const config = node.aiConfig ?? { objective: node.value, instructions: '', maxTurns: 40, model: 'gemini-2.5-flash', provider: 'gemini' }
         const credentialRequested = Boolean(config.credentialId)
         let storedCredential: Awaited<ReturnType<typeof getCredentialSecret>> = null
         if (credentialRequested) {
@@ -268,6 +262,7 @@ export async function POST(request: NextRequest) {
         const selectedKey = credentialRequested
           ? storedCredential?.apiKey ?? ''
           : provider === 'gemini' ? geminiApiKey : openaiApiKey
+        const selectedModel=String(storedCredential?.model||config.model||(provider==='gemini'?'gemini-2.5-flash':'gpt-5.6'))
         if(!selectedKey){
           await fetch(`${baseUrl}/message/sendText/${instanceName}`,{method:'POST',headers:{apikey:apiKey,'content-type':'application/json'},body:JSON.stringify({number,text:'O atendimento automático está temporariamente indisponível. Vou encaminhar você para nossa equipe.',delay:300})})
           automationState[number]={...state,paused:true,reason:credentialRequested?'Credencial selecionada não foi encontrada ou não pôde ser aberta':`Chave do provedor ${provider} não carregada`,updatedAt:new Date().toISOString()}
@@ -276,10 +271,10 @@ export async function POST(request: NextRequest) {
         }
         const turns = Number(state.agentTurns ?? 0) + 1
         let profile: any = {}
-        try { profile = JSON.parse(await fs.readFile(aiProfilePath, 'utf8')) } catch {}
+        try { profile = repairTextEncoding(JSON.parse(await fs.readFile(aiProfilePath, 'utf8'))) } catch {}
         const instructions = buildAgentInstructions(profile, config, state.qualificationData ?? {}, history.length===0)
         const response = provider === 'gemini'
-          ? await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(config.model || 'gemini-2.5-flash')}:generateContent`, {
+          ? await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(selectedModel)}:generateContent`, {
               method: 'POST',
               headers: { 'x-goog-api-key': selectedKey, 'content-type': 'application/json' },
               body: JSON.stringify({
@@ -291,14 +286,23 @@ export async function POST(request: NextRequest) {
                 generationConfig: { responseMimeType: 'application/json', responseJsonSchema: qualificationSchema },
               }),
             })
-          : await fetch('https://api.openai.com/v1/responses', {
+          : provider==='openai' ? await fetch('https://api.openai.com/v1/responses', {
               method: 'POST',
               headers: { authorization: `Bearer ${selectedKey}`, 'content-type': 'application/json' },
               body: JSON.stringify({
-                model: config.model || 'gpt-5.6',
+                model: selectedModel,
                 instructions,
                 input: [...history.slice(-12), { role: 'user', content: text }],
                 text: { format: { type: 'json_schema', name: 'pre_atendimento', strict: true, schema: qualificationSchema } },
+              }),
+            })
+          : await fetch(`${String(storedCredential?.baseUrl??'').replace(/\/+$/,'')}/chat/completions`,{
+              method:'POST',
+              headers:{authorization:`Bearer ${selectedKey}`,'content-type':'application/json'},
+              body:JSON.stringify({
+                model:selectedModel,
+                messages:[{role:'system',content:`${instructions}\nResponda somente como JSON válido com: reply (texto), status (continue, qualified ou handoff), summary (texto) e qualification (lista de objetos field e value).`},...history.slice(-12),{role:'user',content:text}],
+                response_format:{type:'json_object'},
               }),
             })
         if (!response.ok) {
@@ -310,12 +314,14 @@ export async function POST(request: NextRequest) {
         const result: any = await response.json()
         let measured:any={inputTokens:0,outputTokens:0,totalTokens:0,calls:0}
         try{measured=JSON.parse(await fs.readFile(aiUsagePath,'utf8'))}catch{}
-        const inputTokens=Number(result.usage?.input_tokens??result.usageMetadata?.promptTokenCount??0),outputTokens=Number(result.usage?.output_tokens??result.usageMetadata?.candidatesTokenCount??0)
+        const inputTokens=Number(result.usage?.input_tokens??result.usage?.prompt_tokens??result.usageMetadata?.promptTokenCount??0),outputTokens=Number(result.usage?.output_tokens??result.usage?.completion_tokens??result.usageMetadata?.candidatesTokenCount??0)
         measured={inputTokens:Number(measured.inputTokens??0)+inputTokens,outputTokens:Number(measured.outputTokens??0)+outputTokens,totalTokens:Number(measured.totalTokens??0)+inputTokens+outputTokens,calls:Number(measured.calls??0)+1,lastUsedAt:new Date().toISOString(),lastProvider:provider}
         await fs.writeFile(aiUsagePath,JSON.stringify(measured,null,2),'utf8')
         const outputText = provider === 'gemini'
           ? result.candidates?.[0]?.content?.parts?.map((part:any)=>part.text ?? '').join('')
-          : result.output_text ?? result.output?.flatMap((item: any) => item.content ?? []).find((item: any) => item.type === 'output_text')?.text
+          : provider==='openai'
+            ? result.output_text ?? result.output?.flatMap((item: any) => item.content ?? []).find((item: any) => item.type === 'output_text')?.text
+            : result.choices?.[0]?.message?.content
         const decision = JSON.parse(outputText || '{"reply":"Como posso ajudar?","status":"continue","summary":"","qualification":[]}')
         const qualificationData={...(state.qualificationData??{})}
         for(const item of Array.isArray(decision.qualification)?decision.qualification:[]){if(item?.field&&item?.value)qualificationData[String(item.field)]=String(item.value)}
@@ -336,8 +342,12 @@ export async function POST(request: NextRequest) {
         await fetch(`${baseUrl}/message/sendText/${instanceName}`, { method: 'POST', headers: { apikey: apiKey, 'content-type': 'application/json' }, body: JSON.stringify({ number, text: decision.reply, delay: 500 }) })
         const nextHistory = [...history, { role: 'user', content: text }, { role: 'assistant', content: decision.reply }].slice(-14)
         const requiredQuestionCount=questionScript.filter((item:any)=>item.required!==false).length
-        const effectiveMaxTurns=Math.min(Math.max(Number(config.maxTurns)||8,requiredQuestionCount+2,1),30)
-        const forcedHandoff = turns >= effectiveMaxTurns
+        const configuredMaxTurns=Math.min(Math.max(Number(config.maxTurns)||40,1),100)
+        const minimumForQualification=Math.min(Math.max(requiredQuestionCount*3+6,12),100)
+        const effectiveMaxTurns=Math.max(configuredMaxTurns,minimumForQualification)
+        // Nunca entrega para humano somente por limite enquanto ainda faltarem perguntas obrigatórias.
+        // O teto absoluto evita uma conversa presa caso o contato nunca responda ao roteiro.
+        const forcedHandoff = turns >= 100 || (turns >= effectiveMaxTurns && missingRequired.length===0)
         const status = forcedHandoff ? 'handoff' : decision.status
         const terminal = status === 'qualified' || status === 'handoff'
         automationState[number] = {

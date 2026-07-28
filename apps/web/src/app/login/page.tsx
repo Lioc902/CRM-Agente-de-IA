@@ -1,0 +1,2 @@
+import { AuthForm } from '../../components/auth-form'
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) { const { next } = await searchParams; return <main className="asax-auth-shell"><section className="asax-auth-intro"><img src="/asax-symbol.png" alt="ASAX" /><p>ASAX CRM</p><h1>O comando comercial da sua operação.</h1><span>Atendimento, automações e inteligência artificial em uma base única.</span></section><section className="asax-auth-card"><AuthForm mode="login" next={next} /></section></main> }
