@@ -7,6 +7,16 @@ type DbRole = (typeof roles)[keyof typeof roles]
 const labelForRole = (role: string) => Object.entries(roles).find(([, value]) => value === role)?.[0] ?? 'Atendente'
 const initialOwnerEmail = (process.env.ASAX_OWNER_EMAIL ?? 'liocastilho@gmail.com').trim().toLowerCase()
 
+async function ensureInitialOwner(user: { id: string; email?: string | null; user_metadata: Record<string, unknown> }) {
+  if (user.email?.trim().toLowerCase() !== initialOwnerEmail) return
+  const admin = createAdminClient()
+  const { error } = await admin.from('profiles').upsert(
+    { id: user.id, email: user.email, full_name: String(user.user_metadata.full_name ?? 'ASAX'), role: 'admin' },
+    { onConflict: 'id' },
+  )
+  if (error) throw new Error('Nao foi possivel preparar o acesso administrativo.')
+}
+
 async function requireAdmin() {
   const supabase = await createClient()
   const { data: { user }, error } = await supabase.auth.getUser()
@@ -20,11 +30,8 @@ async function requireAdmin() {
       return { error: NextResponse.json({ message: 'Apenas administradores podem gerenciar a equipe.' }, { status: 403 }) }
     }
 
-    const { error: bootstrapError } = await admin.from('profiles').upsert(
-      { id: user.id, email: user.email, full_name: user.user_metadata.full_name ?? 'ASAX', role: 'admin' },
-      { onConflict: 'id' },
-    )
-    if (bootstrapError) return { error: NextResponse.json({ message: 'Nao foi possivel preparar o acesso administrativo.' }, { status: 500 }) }
+    try { await ensureInitialOwner(user) }
+    catch (error) { return { error: NextResponse.json({ message: error instanceof Error ? error.message : 'Nao foi possivel preparar o acesso administrativo.' }, { status: 500 }) } }
   }
   return { admin, user }
 }
@@ -34,11 +41,14 @@ export async function GET() {
   const { data: { user }, error } = await supabase.auth.getUser()
   if (error || !user) return NextResponse.json({ message: 'Autenticacao necessaria.' }, { status: 401 })
   try {
+    await ensureInitialOwner(user)
     const admin = createAdminClient()
     const { data, error: queryError } = await admin.from('profiles').select('id, full_name, email, role, created_at').order('created_at', { ascending: true })
     if (queryError) throw queryError
     return NextResponse.json({ members: (data ?? []).map((member) => ({ id: member.id, name: member.full_name || member.email, email: member.email, role: labelForRole(member.role), createdAt: member.created_at })) })
-  } catch { return NextResponse.json({ message: 'A equipe ainda nao esta pronta no banco de dados.' }, { status: 503 }) }
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : 'A equipe ainda nao esta pronta no banco de dados.' }, { status: 503 })
+  }
 }
 
 export async function POST(request: NextRequest) {

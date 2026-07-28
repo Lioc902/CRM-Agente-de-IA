@@ -16,7 +16,12 @@ export type PublicCredential = Omit<StoredCredential, 'encryptedKey' | 'iv' | 't
 const runtimeDir = path.join(process.cwd(), '.runtime')
 const vaultPath = path.join(runtimeDir, 'ai-credentials.json')
 const masterKeyPath = path.join(runtimeDir, 'credential-master.key')
-const databaseEnabled = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY)
+// Production uses the rotated server key. Keep the legacy name only as a
+// compatibility fallback for local installations that have not migrated yet.
+const databaseEnabled = () => Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    (process.env.SUPABASE_SECRET_KEY_ACTIVE ?? process.env.SUPABASE_SECRET_KEY),
+)
 
 function rowToCredential(row: Record<string, string>): StoredCredential {
   return { id:row.id, name:row.name, provider:row.provider as AICredentialProvider, baseUrl:row.base_url||undefined, model:row.model||undefined, encryptedKey:row.encrypted_key, iv:row.iv, tag:row.tag, keySuffix:row.key_suffix, createdAt:row.created_at, updatedAt:row.updated_at }
