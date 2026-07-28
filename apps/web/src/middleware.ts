@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const publicPaths = ['/login', '/cadastro', '/recuperar-senha', '/redefinir-senha', '/auth/callback']
+const publicPaths = ['/login', '/cadastro', '/recuperar-senha', '/redefinir-senha', '/auth/callback', '/politica-de-privacidade']
 const publicApiPaths = ['/api/meta/whatsapp/webhook', '/api/whatsapp/webhook']
 
 function isPublic(request: NextRequest) {
