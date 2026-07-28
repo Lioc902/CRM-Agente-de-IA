@@ -6,9 +6,11 @@ const roles = { Administrador: 'admin', Supervisor: 'supervisor', Atendente: 'ag
 type DbRole = (typeof roles)[keyof typeof roles]
 const labelForRole = (role: string) => Object.entries(roles).find(([, value]) => value === role)?.[0] ?? 'Atendente'
 const initialOwnerEmail = (process.env.ASAX_OWNER_EMAIL ?? 'liocastilho@gmail.com').trim().toLowerCase()
+const emailForUser = (user: { email?: string | null; user_metadata?: Record<string, unknown> }) =>
+  String(user.email ?? user.user_metadata?.email ?? '').trim().toLowerCase()
 
 async function ensureInitialOwner(user: { id: string; email?: string | null; user_metadata: Record<string, unknown> }) {
-  if (user.email?.trim().toLowerCase() !== initialOwnerEmail) return
+  if (emailForUser(user) !== initialOwnerEmail) return
   const admin = createAdminClient()
   const { error } = await admin.from('profiles').upsert(
     { id: user.id, email: user.email, full_name: String(user.user_metadata.full_name ?? 'ASAX'), role: 'admin' },
@@ -29,7 +31,7 @@ async function requireAdmin() {
   if (profile?.role !== 'admin') {
     // The initial owner is promoted once, directly in the protected server route.
     // All other accounts still require a role assigned by an administrator.
-    if (user.email?.trim().toLowerCase() !== initialOwnerEmail) {
+    if (emailForUser(user) !== initialOwnerEmail) {
       return { error: NextResponse.json({ message: 'Apenas administradores podem gerenciar a equipe.' }, { status: 403 }) }
     }
 
