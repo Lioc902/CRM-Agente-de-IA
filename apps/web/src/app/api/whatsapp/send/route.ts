@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isMetaWhatsAppConfigured, sendMetaWhatsAppText } from '../../../../lib/whatsapp/meta'
+import { saveOutgoingMetaMessage } from '../../../../lib/whatsapp/store'
 
 const baseUrl = process.env.EVOLUTION_API_URL ?? 'http://127.0.0.1:8080'
 const apiKey = process.env.EVOLUTION_API_KEY
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
   if (isMetaWhatsAppConfigured()) {
     try {
       const data = await sendMetaWhatsAppText(normalized, message)
+      await saveOutgoingMetaMessage({ id: data.id, number: normalized, text: message })
       return NextResponse.json({ ...data, status: 'sent', provider: 'meta' })
     } catch (error) {
       const status = (error as Error & { status?: number }).status ?? 503

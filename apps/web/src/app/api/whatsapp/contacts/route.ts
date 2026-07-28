@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { promises as fs } from 'fs'
 import path from 'path'
+import { isMetaWhatsAppConfigured } from '../../../../lib/whatsapp/meta'
+import { listMetaContacts } from '../../../../lib/whatsapp/store'
 
 const baseUrl = process.env.EVOLUTION_API_URL ?? 'http://127.0.0.1:8080'
 const apiKey = process.env.EVOLUTION_API_KEY
@@ -12,6 +14,10 @@ async function localContacts() {
 }
 
 export async function GET() {
+  if (isMetaWhatsAppConfigured()) {
+    try { return NextResponse.json({ contacts: await listMetaContacts() }) }
+    catch (error) { return NextResponse.json({ message: error instanceof Error ? error.message : 'Não foi possível carregar os contatos oficiais.' }, { status: 503 }) }
+  }
   if (!apiKey) return NextResponse.json({ message: 'WhatsApp não configurado' }, { status: 503 })
   try {
     const [instancesResponse, messagesResponse, locals] = await Promise.all([

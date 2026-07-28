@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isMetaWhatsAppConfigured } from '../../../../lib/whatsapp/meta'
+import { listMetaMessages } from '../../../../lib/whatsapp/store'
 
 const baseUrl = process.env.EVOLUTION_API_URL ?? 'http://127.0.0.1:8080'
 const apiKey = process.env.EVOLUTION_API_KEY
@@ -18,6 +20,10 @@ function textFromMessage(message: Record<string, any> = {}) {
 }
 
 export async function GET(request: NextRequest) {
+  if (isMetaWhatsAppConfigured()) {
+    try { return NextResponse.json({ messages: await listMetaMessages(request.nextUrl.searchParams.get('remoteJid')) }) }
+    catch (error) { return NextResponse.json({ message: error instanceof Error ? error.message : 'Falha ao carregar conversas oficiais.' }, { status: 503 }) }
+  }
   if (!apiKey) return NextResponse.json({ message: 'WhatsApp não configurado' }, { status: 503 })
   const remoteJid = request.nextUrl.searchParams.get('remoteJid')
   const body = remoteJid ? { where: { key: { remoteJid } }, page: 1, offset: 100 } : { page: 1, offset: 200 }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
-import { promises as fs } from 'fs'
-import path from 'path'
+import { saveIncomingMetaMessage } from '../../../../../lib/whatsapp/store'
 
 export const runtime = 'nodejs'
 
@@ -9,7 +8,6 @@ export const runtime = 'nodejs'
 const verifyToken = process.env.META_WHATSAPP_VERIFY_TOKEN_ACTIVE ?? process.env.META_WHATSAPP_VERIFY_TOKEN
 // META_APP_SECRET_ACTIVE permits a safe secret rotation without downtime.
 const appSecret = process.env.META_APP_SECRET_ACTIVE ?? process.env.META_APP_SECRET
-const eventsPath = path.join(process.cwd(), '.runtime', 'meta-whatsapp-events.json')
 
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('hub.mode')
@@ -31,16 +29,31 @@ export async function POST(request: NextRequest) {
     const valid = signature && signature.length === expected.length && timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
     if (!valid) return NextResponse.json({ accepted: false }, { status: 401 })
   }
-  const payload = JSON.parse(rawPayload || 'null')
+  let payload: any
+  try { payload = JSON.parse(rawPayload || 'null') } catch { return NextResponse.json({ accepted: false }, { status: 400 }) }
   if (!payload || payload.object !== 'whatsapp_business_account') {
     return NextResponse.json({ accepted: false }, { status: 400 })
   }
 
-  await fs.mkdir(path.dirname(eventsPath), { recursive: true })
-  let events: unknown[] = []
-  try { events = JSON.parse(await fs.readFile(eventsPath, 'utf8')) } catch {}
-  events.push({ receivedAt: new Date().toISOString(), payload })
-  await fs.writeFile(eventsPath, JSON.stringify(events.slice(-1000), null, 2), 'utf8')
+  try {
+    for (const entry of payload.entry ?? []) for (const change of entry.changes ?? []) {
+      const value = change?.value
+      if (change?.field !== 'messages' || !value?.messages) continue
+      const names = new Map<string, string>((value.contacts ?? []).map((contact: any): [string, string] => [String(contact.wa_id), String(contact.profile?.name ?? '')]))
+      for (const message of value.messages) {
+        const type = String(message.type ?? 'text')
+        const interactive = message.interactive?.button_reply?.title ?? message.interactive?.list_reply?.title ?? null
+        await saveIncomingMetaMessage({
+          id: String(message.id), from: String(message.from), name: names.get(String(message.from)) ?? null,
+          timestamp: message.timestamp, type, text: String(message.text?.body ?? interactive ?? message.button?.text ?? '').trim() || null,
+          mediaId: message[type]?.id ?? null, mimeType: message[type]?.mime_type ?? null, raw: message,
+        })
+      }
+    }
+  } catch (error) {
+    console.error('Meta WhatsApp webhook persistence failed', error)
+    return NextResponse.json({ accepted: false }, { status: 503 })
+  }
 
   return NextResponse.json({ accepted: true })
 }
