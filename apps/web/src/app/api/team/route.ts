@@ -5,6 +5,7 @@ import { createAdminClient } from '../../../lib/supabase/admin'
 const roles = { Administrador: 'admin', Supervisor: 'supervisor', Atendente: 'agent' } as const
 type DbRole = (typeof roles)[keyof typeof roles]
 const labelForRole = (role: string) => Object.entries(roles).find(([, value]) => value === role)?.[0] ?? 'Atendente'
+const initialOwnerEmail = (process.env.ASAX_OWNER_EMAIL ?? 'liocastilho@gmail.com').trim().toLowerCase()
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -12,7 +13,19 @@ async function requireAdmin() {
   if (error || !user) return { error: NextResponse.json({ message: 'Autenticacao necessaria.' }, { status: 401 }) }
   const admin = createAdminClient()
   const { data: profile } = await admin.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'admin') return { error: NextResponse.json({ message: 'Apenas administradores podem gerenciar a equipe.' }, { status: 403 }) }
+  if (profile?.role !== 'admin') {
+    // The initial owner is promoted once, directly in the protected server route.
+    // All other accounts still require a role assigned by an administrator.
+    if (user.email?.trim().toLowerCase() !== initialOwnerEmail) {
+      return { error: NextResponse.json({ message: 'Apenas administradores podem gerenciar a equipe.' }, { status: 403 }) }
+    }
+
+    const { error: bootstrapError } = await admin.from('profiles').upsert(
+      { id: user.id, email: user.email, full_name: user.user_metadata.full_name ?? 'ASAX', role: 'admin' },
+      { onConflict: 'id' },
+    )
+    if (bootstrapError) return { error: NextResponse.json({ message: 'Nao foi possivel preparar o acesso administrativo.' }, { status: 500 }) }
+  }
   return { admin, user }
 }
 
