@@ -411,8 +411,14 @@ function ApiVault({notify}:{notify:(message:string)=>void}){
   const [model,setModel]=useState('')
   const [saving,setSaving]=useState(false)
   const [testing,setTesting]=useState('')
+  const readResponse = async (response: Response) => {
+    const raw = await response.text()
+    if (!raw.trim()) return { message: response.ok ? 'O servidor não retornou dados.' : `Falha no servidor (${response.status}).` }
+    try { return JSON.parse(raw) as { message?: string; credentials?: AICredential[]; id?: string; removed?: boolean; ok?: boolean } }
+    catch { return { message: response.ok ? 'Resposta inválida do servidor.' : `Falha no servidor (${response.status}).` } }
+  }
   async function load(){
-    try{const response=await fetch('/api/ai/credentials',{cache:'no-store'});const data=await response.json();if(!response.ok)throw new Error(data.message);setCredentials(data.credentials??[])}
+    try{const response=await fetch('/api/ai/credentials',{cache:'no-store'});const data=await readResponse(response);if(!response.ok)throw new Error(data.message);setCredentials(data.credentials??[])}
     catch(error){notify(error instanceof Error?error.message:'Falha ao carregar APIs')}
   }
   useEffect(()=>{load()},[])
@@ -421,19 +427,19 @@ function ApiVault({notify}:{notify:(message:string)=>void}){
     setSaving(true)
     try{
       const response=await fetch('/api/ai/credentials',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,provider,apiKey,baseUrl,model})})
-      const data=await response.json();if(!response.ok)throw new Error(data.message)
-      setCredentials(current=>[...current,data]);setName('');setApiKey('');setBaseUrl('');setModel('');notify('API salva e protegida')
+      const data=await readResponse(response);if(!response.ok)throw new Error(data.message)
+      setCredentials(current=>[...current,data as AICredential]);setName('');setApiKey('');setBaseUrl('');setModel('');notify('API salva e protegida')
     }catch(error){notify(error instanceof Error?error.message:'Falha ao salvar API')}finally{setSaving(false)}
   }
   async function test(id:string){
     setTesting(id)
-    try{const response=await fetch('/api/ai/credentials',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id})});const data=await response.json();if(!response.ok)throw new Error(data.message);notify(`${data.message}: API pronta para uso`)}
+    try{const response=await fetch('/api/ai/credentials',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id})});const data=await readResponse(response);if(!response.ok)throw new Error(data.message);notify(`${data.message}: API pronta para uso`)}
     catch(error){notify(error instanceof Error?error.message:'Falha ao testar API')}finally{setTesting('')}
   }
   async function remove(id:string){
     if(!window.confirm('Excluir esta API? Blocos que usam esta credencial precisarão selecionar outra.'))return
     const response=await fetch(`/api/ai/credentials?id=${encodeURIComponent(id)}`,{method:'DELETE'})
-    const data=await response.json();if(!response.ok)return notify(data.message??'Falha ao excluir API')
+    const data=await readResponse(response);if(!response.ok)return notify(data.message??'Falha ao excluir API')
     setCredentials(current=>current.filter(item=>item.id!==id));notify('API removida')
   }
   return <div className="module api-vault"><header><div><span className="eyebrow">COFRE DE INTEGRAÇÕES · CRIPTOGRAFADO</span><h1>APIs e credenciais</h1><p>Cadastre várias chaves e escolha qual delas cada automação deve usar.</p></div><div className="vault-security"><ShieldCheck/><span><b>Proteção local ativa</b><small>As chaves nunca voltam para a tela</small></span></div></header>
