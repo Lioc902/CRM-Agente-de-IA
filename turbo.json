@@ -1,6 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalEnv": [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "SUPABASE_SECRET_KEY_ACTIVE",
+    "META_WHATSAPP_ACCESS_TOKEN",
+    "META_WHATSAPP_PHONE_NUMBER_ID",
+    "META_WHATSAPP_VERIFY_TOKEN",
+    "META_WHATSAPP_VERIFY_TOKEN_ACTIVE",
+    "META_APP_SECRET",
+    "META_APP_SECRET_ACTIVE",
+    "ASAX_OWNER_EMAIL",
+    "AI_CREDENTIAL_ENCRYPTION_KEY"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
