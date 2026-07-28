@@ -7,7 +7,8 @@ export const runtime = 'nodejs'
 
 // A variável de ambiente substitui o valor local de teste assim que o CRM for publicado.
 const verifyToken = process.env.META_WHATSAPP_VERIFY_TOKEN
-const appSecret = process.env.META_APP_SECRET
+// META_APP_SECRET_ACTIVE permits a safe secret rotation without downtime.
+const appSecret = process.env.META_APP_SECRET_ACTIVE ?? process.env.META_APP_SECRET
 const eventsPath = path.join(process.cwd(), '.runtime', 'meta-whatsapp-events.json')
 
 export async function GET(request: NextRequest) {
