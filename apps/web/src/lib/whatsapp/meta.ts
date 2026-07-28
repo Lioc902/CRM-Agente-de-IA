@@ -19,12 +19,13 @@ export async function getMetaWhatsAppStatus() {
 export async function subscribeMetaWhatsAppWebhook() {
   if (!accessToken || !phoneNumberId) throw new Error('META_WHATSAPP_NOT_CONFIGURED')
 
-  const phoneResponse = await fetch(`https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=whatsapp_business_account`, {
+  const accountResponse = await fetch(`https://graph.facebook.com/${graphVersion}/me/whatsapp_business_accounts?fields=id,phone_numbers.limit(100){id}`, {
     headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
   })
-  const phoneData = await phoneResponse.json().catch(() => null)
-  const wabaId = phoneData?.whatsapp_business_account?.id
-  if (!phoneResponse.ok || !wabaId) throw new Error(phoneData?.error?.message ?? 'Não foi possível localizar a conta do WhatsApp Business.')
+  const accountData = await accountResponse.json().catch(() => null)
+  const account = accountData?.data?.find((item: { phone_numbers?: { data?: Array<{ id?: string }> } }) => item.phone_numbers?.data?.some((phone) => phone.id === phoneNumberId))
+  const wabaId = account?.id
+  if (!accountResponse.ok || !wabaId) throw new Error(accountData?.error?.message ?? 'O token não encontrou a conta do WhatsApp Business deste número.')
 
   const response = await fetch(`https://graph.facebook.com/${graphVersion}/${wabaId}/subscribed_apps`, {
     method: 'POST', headers: { authorization: `Bearer ${accessToken}` }, cache: 'no-store',
