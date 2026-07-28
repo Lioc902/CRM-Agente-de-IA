@@ -10,3 +10,7 @@ dist/
 .pgdata*/
 .services/
 .runtime/
+
+.vercel
+
+.vercel
