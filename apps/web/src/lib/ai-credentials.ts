@@ -20,7 +20,7 @@ const masterKeyPath = path.join(runtimeDir, 'credential-master.key')
 // compatibility fallback for local installations that have not migrated yet.
 const databaseEnabled = () => Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    (process.env.SUPABASE_SECRET_KEY_ACTIVE ?? process.env.SUPABASE_SECRET_KEY),
+    (process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SECRET_KEY_ACTIVE),
 )
 
 function rowToCredential(row: Record<string, string>): StoredCredential {
@@ -31,7 +31,7 @@ function credentialToRow(item: StoredCredential) {
 }
 
 async function masterKey() {
-  const configuredSecret = process.env.AI_CREDENTIAL_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY_ACTIVE ?? process.env.SUPABASE_SECRET_KEY
+  const configuredSecret = process.env.AI_CREDENTIAL_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SECRET_KEY_ACTIVE
   if (configuredSecret) return createHash('sha256').update(configuredSecret).digest()
   if (process.env.NODE_ENV === 'production') throw new Error('Chave de criptografia das credenciais não configurada.')
   await fs.mkdir(runtimeDir, { recursive: true })
