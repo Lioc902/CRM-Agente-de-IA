@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
+import { createClient as createSupabaseClient } from '../lib/supabase/client'
 
 type Deal = { id: number | string; name: string; company: string; value: number; age: string; tag: string; color: string; number?: string }
 type Stage = { id: string; label: string; accent: string; deals: Deal[] }
@@ -42,6 +43,17 @@ export default function Dashboard() {
   useEffect(() => {
     const saved = localStorage.getItem('asax.pipeline.stages')
     if (saved) setStages(JSON.parse(saved))
+  }, [])
+  useEffect(() => {
+    let active = true
+    const supabase = createSupabaseClient()
+    supabase.auth.getClaims().then(({ data }) => {
+      if (!active) return
+      if (!data?.claims) window.location.replace('/login?next=/')
+    }).catch(() => {
+      if (active) window.location.replace('/login?next=/')
+    })
+    return () => { active = false }
   }, [])
   useEffect(() => {
     const saved=localStorage.getItem('asax.theme')
@@ -903,9 +915,15 @@ function RealInbox({ notify }: { notify: (message: string) => void }) {
       const response = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ number: current.number, text }),
       })
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
+      if (response.status === 401) {
+        notify('Sua sessao expirou. Entre novamente para enviar mensagens.')
+        window.setTimeout(() => window.location.assign('/login?next=/'), 700)
+        return
+      }
       if (!response.ok) throw new Error(data.message)
       setDraft('')
       notify('Mensagem enviada pelo WhatsApp')
